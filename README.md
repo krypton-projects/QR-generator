@@ -103,8 +103,15 @@
 ### Instalacja
 
 ```bash
+# One-liner
+git clone https://github.com/krypton-projects/QR-generator && cd QR-generator && npm install && npm start
+```
+
+lub krok po kroku:
+
+```bash
 # 1. Sklonuj repozytorium
-git clone <url-repozytorium>
+git clone https://github.com/krypton-projects/QR-generator
 cd QR-generator
 
 # 2. Zainstaluj zależności
