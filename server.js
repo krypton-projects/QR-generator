@@ -118,12 +118,15 @@ const upload = multer({
 });
 
 // ── Helper: normalise options ─────────────────────────────────────────────────
+const VALID_DOT_STYLES = ['square', 'rounded', 'circle'];
+
 function normaliseOptions(opts = {}, defaultECL = 'M') {
   return {
     errorCorrectionLevel: ['L','M','Q','H'].includes(opts.errorCorrectionLevel)
       ? opts.errorCorrectionLevel : defaultECL,
-    margin: Math.min(Math.max(parseInt(opts.margin) || 2, 0), 10),
-    width:  Math.min(Math.max(parseInt(opts.width)  || 300, 100), 1000),
+    margin:   Math.min(Math.max(parseInt(opts.margin) || 2, 0), 10),
+    width:    Math.min(Math.max(parseInt(opts.width)  || 300, 100), 1000),
+    dotStyle: VALID_DOT_STYLES.includes(opts.dotStyle) ? opts.dotStyle : 'square',
     color: {
       dark:  /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(opts.color?.dark)
                ? opts.color.dark : '#000000',
@@ -131,6 +134,45 @@ function normaliseOptions(opts = {}, defaultECL = 'M') {
                ? opts.color.light : '#ffffff',
     },
   };
+}
+
+// ── Custom SVG builder (rounded / circle dot styles) ─────────────────────────
+function buildCustomSVG(text, qrOpts) {
+  const { dotStyle, width, margin, errorCorrectionLevel, color } = qrOpts;
+  const dark  = color.dark;
+  const light = color.light;
+
+  const qr      = QRCode.create(text, { errorCorrectionLevel });
+  const size    = qr.modules.size;
+  const modules = qr.modules.data;
+  const total   = size + margin * 2;
+  const cell    = width / total;
+
+  const parts = [];
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (!modules[r * size + c]) continue;
+      const cx = (c + margin + 0.5) * cell;
+      const cy = (r + margin + 0.5) * cell;
+
+      if (dotStyle === 'circle') {
+        const radius = (cell * 0.42).toFixed(2);
+        parts.push(`<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${radius}" fill="${dark}"/>`);
+      } else if (dotStyle === 'rounded') {
+        const s  = cell * 0.88;
+        const rx = (s * 0.35).toFixed(2);
+        const x  = (cx - s / 2).toFixed(2);
+        const y  = (cy - s / 2).toFixed(2);
+        parts.push(`<rect x="${x}" y="${y}" width="${s.toFixed(2)}" height="${s.toFixed(2)}" rx="${rx}" fill="${dark}"/>`);
+      } else {
+        const x = ((c + margin) * cell).toFixed(2);
+        const y = ((r + margin) * cell).toFixed(2);
+        parts.push(`<rect x="${x}" y="${y}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" fill="${dark}"/>`);
+      }
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${width}" viewBox="0 0 ${width} ${width}"><rect width="${width}" height="${width}" fill="${light}"/>${parts.join('')}</svg>`;
 }
 
 // ── POST /api/generate ────────────────────────────────────────────────────────
@@ -148,12 +190,18 @@ app.post('/api/generate', rateLimit, async (req, res) => {
     const format  = options?.format === 'svg' ? 'svg' : 'png';
     const qrOpts  = normaliseOptions(options);
 
-    // Log only metadata – never the actual QR content
-    console.log(`[QR] type=${type} format=${format} size=${qrOpts.width}`);
+    const { dotStyle } = qrOpts;
+    const useCustom = dotStyle !== 'square';
 
-    if (format === 'svg') {
-      const svg = await QRCode.toString(qrData, { ...qrOpts, type: 'svg' });
-      return res.json({ qr: svg, format: 'svg' });
+    // Log only metadata – never the actual QR content
+    console.log(`[QR] type=${type} format=${format} size=${qrOpts.width} dots=${dotStyle}`);
+
+    if (useCustom || format === 'svg') {
+      const svg = buildCustomSVG(qrData, qrOpts);
+      if (format === 'svg') return res.json({ qr: svg, format: 'svg' });
+      // Convert custom SVG → PNG via sharp
+      const pngBuf = await sharp(Buffer.from(svg)).png().toBuffer();
+      return res.json({ qr: `data:image/png;base64,${pngBuf.toString('base64')}`, format: 'png' });
     }
 
     const dataUrl = await QRCode.toDataURL(qrData, qrOpts);
@@ -181,8 +229,11 @@ app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req
       return res.status(400).json({ error: 'Brak danych do zakodowania' });
 
     // Use H error correction when logo covers the center
-    const qrOpts = normaliseOptions(options, 'H');
-    const qrBuffer = await QRCode.toBuffer(qrData, qrOpts);
+    const qrOpts  = normaliseOptions(options, 'H');
+    const useCustom = qrOpts.dotStyle !== 'square';
+    const qrBuffer = useCustom
+      ? await sharp(Buffer.from(buildCustomSVG(qrData, qrOpts))).png().toBuffer()
+      : await QRCode.toBuffer(qrData, qrOpts);
 
     if (!req.file) {
       return res.json({

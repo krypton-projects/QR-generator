@@ -1,10 +1,11 @@
 'use strict';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let currentType   = 'wifi';
-let currentQR     = null;   // { dataUrl|svg, format, label }
-let logoFile      = null;
-let generateTimer = null;
+let currentType    = 'wifi';
+let currentQR      = null;   // { dataUrl|svg, format, label }
+let logoFile       = null;
+let generateTimer  = null;
+let currentDotStyle = 'square';
 const HISTORY_KEY = 'qr-history';
 const MAX_HISTORY = 10;
 
@@ -77,6 +78,16 @@ document.getElementById('opt-ecl').addEventListener('change', scheduleGenerate);
 document.querySelectorAll('input[name="format"]').forEach(r =>
   r.addEventListener('change', scheduleGenerate)
 );
+
+// ── Dot style buttons ─────────────────────────────────────────────────────────
+document.querySelectorAll('.dot-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dot-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentDotStyle = btn.dataset.dot;
+    scheduleGenerate();
+  });
+});
 
 // ── Password toggle ───────────────────────────────────────────────────────────
 document.getElementById('togglePwd').addEventListener('click', () => {
@@ -200,6 +211,7 @@ async function generateQR() {
     width:                parseInt(document.getElementById('opt-size').value),
     margin:               parseInt(document.getElementById('opt-margin').value),
     errorCorrectionLevel: document.getElementById('opt-ecl').value,
+    dotStyle:             currentDotStyle,
     color: {
       dark:  document.getElementById('opt-dark').value,
       light: document.getElementById('opt-light').value,

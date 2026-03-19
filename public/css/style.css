@@ -551,4 +551,44 @@ input[type="range"] {
 [data-theme="light"] .icon-moon { display: none; }
 [data-theme="dark"]  .icon-sun  { display: none; }
 
+/* ── Dot style selector ──────────────────────────────────────────────────────── */
+.dot-style-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.dot-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.25rem;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color var(--transition), color var(--transition), background var(--transition);
+  font-family: inherit;
+}
+
+.dot-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  background: var(--surface);
+}
+
+.dot-btn.active {
+  border-color: var(--primary);
+  background: #ede9fe;
+  color: var(--primary);
+}
+
+[data-theme="dark"] .dot-btn.active {
+  background: #2e1065;
+}
+
 .hidden { display: none !important; }
