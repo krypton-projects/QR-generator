@@ -39,7 +39,9 @@ function rateLimit(req, res, next) {
   const WIN = 60_000;
   const MAX = 100;
   const rec = rateMap.get(ip);
+  // S2: delete stale entry to prevent unbounded map growth
   if (!rec || now - rec.start > WIN) {
+    rateMap.delete(ip);
     rateMap.set(ip, { count: 1, start: now });
     return next();
   }
@@ -51,8 +53,17 @@ function rateLimit(req, res, next) {
 // ── QR data formatters ────────────────────────────────────────────────────────
 const ALLOWED_TYPES = ['url', 'wifi', 'text', 'email', 'phone', 'sms', 'vcard'];
 
+// S1: escape special chars per each format's spec
 function escapeWifi(s) {
   return String(s).replace(/[\\;,"]/g, c => '\\' + c);
+}
+function escapeVCard(s) {
+  // RFC 6350: escape \, ;, and , in property values
+  return String(s).replace(/[\\;,]/g, c => '\\' + c).replace(/\n/g, '\\n');
+}
+function escapeMATMSG(s) {
+  // MATMSG spec: escape \ and ; in field values
+  return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;');
 }
 
 function buildQRData(type, data) {
@@ -71,7 +82,7 @@ function buildQRData(type, data) {
 
     case 'email': {
       const { to = '', subject = '', body = '' } = data;
-      return `MATMSG:TO:${to};SUB:${subject};BODY:${body};;`;
+      return `MATMSG:TO:${escapeMATMSG(to)};SUB:${escapeMATMSG(subject)};BODY:${escapeMATMSG(body)};;`;
     }
 
     case 'phone':
@@ -92,12 +103,12 @@ function buildQRData(type, data) {
       return [
         'BEGIN:VCARD',
         'VERSION:3.0',
-        `N:${lastName};${firstName};;;`,
-        `FN:${firstName} ${lastName}`.trim(),
-        phone ? `TEL:${phone}`   : null,
-        email ? `EMAIL:${email}` : null,
-        org   ? `ORG:${org}`     : null,
-        url   ? `URL:${url}`     : null,
+        `N:${escapeVCard(lastName)};${escapeVCard(firstName)};;;`,
+        `FN:${escapeVCard(`${firstName} ${lastName}`.trim())}`,
+        phone ? `TEL:${escapeVCard(phone)}`   : null,
+        email ? `EMAIL:${escapeVCard(email)}` : null,
+        org   ? `ORG:${escapeVCard(org)}`     : null,
+        url   ? `URL:${url}`                  : null,
         'END:VCARD',
       ].filter(Boolean).join('\n');
     }
@@ -165,8 +176,9 @@ function buildCustomSVG(text, qrOpts) {
         const y  = (cy - s / 2).toFixed(2);
         parts.push(`<rect x="${x}" y="${y}" width="${s.toFixed(2)}" height="${s.toFixed(2)}" rx="${rx}" fill="${dark}"/>`);
       } else {
-        const x = ((c + margin) * cell).toFixed(2);
-        const y = ((r + margin) * cell).toFixed(2);
+        // Q3: use center coords for consistency with rounded/circle
+        const x = (cx - cell / 2).toFixed(2);
+        const y = (cy - cell / 2).toFixed(2);
         parts.push(`<rect x="${x}" y="${y}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" fill="${dark}"/>`);
       }
     }
@@ -184,7 +196,8 @@ app.post('/api/generate', rateLimit, async (req, res) => {
       return res.status(400).json({ error: 'Nieprawidłowy typ QR' });
 
     const qrData = buildQRData(type, data || {});
-    if (!qrData)
+    // S4: empty string is falsy only via trim check
+    if (!qrData || !qrData.trim())
       return res.status(400).json({ error: 'Brak danych do zakodowania' });
 
     const format  = options?.format === 'svg' ? 'svg' : 'png';
@@ -217,7 +230,11 @@ app.post('/api/generate', rateLimit, async (req, res) => {
 app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req, res) => {
   try {
     let payload = {};
-    try { payload = JSON.parse(req.body.payload || '{}'); } catch { /* ignore */ }
+    try { payload = JSON.parse(req.body.payload || '{}'); } catch (e) {
+      // S6: return explicit error instead of silently using empty payload
+      console.error('[QR] Nieprawidłowy JSON payload:', e.message);
+      return res.status(400).json({ error: 'Nieprawidłowy format danych' });
+    }
 
     const { type, data, options } = payload;
 
@@ -225,7 +242,7 @@ app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req
       return res.status(400).json({ error: 'Nieprawidłowy typ QR' });
 
     const qrData = buildQRData(type, data || {});
-    if (!qrData)
+    if (!qrData || !qrData.trim())
       return res.status(400).json({ error: 'Brak danych do zakodowania' });
 
     // Use H error correction when logo covers the center

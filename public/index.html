@@ -111,7 +111,7 @@
           <label for="wifi-password">Hasło</label>
           <div class="input-password">
             <input type="password" id="wifi-password" name="password" placeholder="••••••••" autocomplete="off" />
-            <button type="button" class="btn-icon-sm" id="togglePwd" aria-label="Pokaż/ukryj hasło" title="Pokaż hasło">
+            <button type="button" class="btn-icon-sm" id="togglePwd" aria-label="Pokaż/ukryj hasło" aria-pressed="false" title="Pokaż hasło">
               <svg class="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
               </svg>
@@ -324,6 +324,8 @@
           <span class="logo-name" id="logoName">brak</span>
           <button type="button" class="btn-icon-sm remove-logo hidden" id="logoRemove" title="Usuń logo">✕</button>
         </div>
+        <!-- F7: thumbnail preview of selected logo -->
+        <img id="logoPreview" class="logo-preview hidden" alt="Podgląd logo" />
         <p class="hint">PNG/JPG/SVG, max 2 MB. ECL zmieniana automatycznie na H.</p>
       </div>
 
@@ -356,12 +358,7 @@
         </div>
       </div>
 
-      <div class="preview-actions" id="previewActions" style="display:none">
-        <button class="btn btn-primary" id="dlPng">PNG</button>
-        <button class="btn btn-outline" id="dlSvg">SVG</button>
-        <button class="btn btn-outline" id="copyBtn">Kopiuj dane</button>
-      </div>
-
+      <!-- U4: format selector above download actions (logical order) -->
       <div class="format-toggle">
         <label class="radio-label">
           <input type="radio" name="format" value="png" checked /> PNG
@@ -371,7 +368,14 @@
         </label>
       </div>
 
-      <div class="toast hidden" id="toast">Skopiowano!</div>
+      <div class="preview-actions" id="previewActions" style="display:none">
+        <button class="btn btn-primary" id="dlPng">Pobierz PNG</button>
+        <button class="btn btn-outline" id="dlSvg">Pobierz SVG</button>
+        <button class="btn btn-outline" id="copyBtn">Kopiuj dane</button>
+      </div>
+
+      <!-- U1: aria-live so screen readers announce toast messages -->
+      <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
     </div>
 
     <!-- History -->

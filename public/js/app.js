@@ -1,11 +1,24 @@
 'use strict';
 
 // ── State ─────────────────────────────────────────────────────────────────────
-let currentType    = 'wifi';
-let currentQR      = null;   // { dataUrl|svg, format, label }
-let logoFile       = null;
-let generateTimer  = null;
+let currentType     = 'wifi';
+let currentQR       = null;   // { qr, format, rawData }
+let logoFile        = null;
+let generateTimer   = null;
 let currentDotStyle = 'square';
+let abortCtrl       = null;   // F4: cancel in-flight requests
+let spinnerTimeout  = null;   // U2: prevent infinite spinner
+
+// Q2: single source of truth for type labels
+const TYPE_LABELS = {
+  wifi: 'WiFi', url: 'URL', text: 'Tekst',
+  email: 'Email', phone: 'Telefon', sms: 'SMS', vcard: 'Kontakt',
+};
+const TYPE_SAFE_NAMES = {
+  wifi: 'wifi', url: 'url', text: 'tekst',
+  email: 'email', phone: 'telefon', sms: 'sms', vcard: 'kontakt',
+};
+
 const HISTORY_KEY = 'qr-history';
 const MAX_HISTORY = 10;
 
@@ -21,6 +34,7 @@ const sizeVal       = document.getElementById('sizeVal');
 const marginVal     = document.getElementById('marginVal');
 const darkHex       = document.getElementById('darkHex');
 const lightHex      = document.getElementById('lightHex');
+const togglePwdBtn  = document.getElementById('togglePwd');
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 (function initTheme() {
@@ -89,16 +103,17 @@ document.querySelectorAll('.dot-btn').forEach(btn => {
   });
 });
 
-// ── Password toggle ───────────────────────────────────────────────────────────
-document.getElementById('togglePwd').addEventListener('click', () => {
-  const input = document.getElementById('wifi-password');
+// ── Password toggle (U3: aria-pressed) ───────────────────────────────────────
+togglePwdBtn.addEventListener('click', () => {
+  const input    = document.getElementById('wifi-password');
   const isHidden = input.type === 'password';
   input.type = isHidden ? 'text' : 'password';
-  document.querySelector('.eye-open').style.display  = isHidden ? 'none'  : '';
+  togglePwdBtn.setAttribute('aria-pressed', String(isHidden));
+  document.querySelector('.eye-open').style.display  = isHidden ? 'none' : '';
   document.querySelector('.eye-closed').style.display = isHidden ? '' : 'none';
 });
 
-// ── Logo upload ───────────────────────────────────────────────────────────────
+// ── Logo upload (F7: thumbnail preview) ───────────────────────────────────────
 document.getElementById('logoPickBtn').addEventListener('click', () =>
   document.getElementById('logoFile').click()
 );
@@ -109,6 +124,16 @@ document.getElementById('logoFile').addEventListener('change', e => {
   logoFile = file;
   document.getElementById('logoName').textContent = file.name;
   document.getElementById('logoRemove').classList.remove('hidden');
+
+  // F7: show thumbnail
+  const preview = document.getElementById('logoPreview');
+  const reader  = new FileReader();
+  reader.onload = ev => {
+    preview.src = ev.target.result;
+    preview.classList.remove('hidden');
+  };
+  reader.readAsDataURL(file);
+
   scheduleGenerate();
 });
 
@@ -117,6 +142,9 @@ document.getElementById('logoRemove').addEventListener('click', () => {
   document.getElementById('logoFile').value = '';
   document.getElementById('logoName').textContent = 'brak';
   document.getElementById('logoRemove').classList.add('hidden');
+  const preview = document.getElementById('logoPreview');
+  preview.src = '';
+  preview.classList.add('hidden');
   scheduleGenerate();
 });
 
@@ -180,14 +208,20 @@ function collectData() {
 
 function hasEnoughData(data) {
   switch (currentType) {
-    case 'wifi':   return data.ssid && data.ssid.trim().length > 0;
-    case 'url':    return data.url  && data.url.trim().length > 3;
-    case 'text':   return data.text && data.text.trim().length > 0;
-    case 'email':  return data.to   && data.to.trim().length > 0;
-    case 'phone':  return data.phone && data.phone.trim().length > 0;
-    case 'sms':    return data.phone && data.phone.trim().length > 0;
-    case 'vcard':  return (data.firstName || data.lastName || data.phone || data.email) &&
-                          (data.firstName + data.lastName + data.phone + data.email).trim().length > 0;
+    case 'wifi':
+      // F5: require password when network is secured
+      return data.ssid?.trim().length > 0 &&
+             (data.security === 'nopass' || data.password?.length > 0);
+    case 'url': {
+      // F6: require valid URL format
+      const url = data.url?.trim() || '';
+      return url.length > 0 && /^https?:\/\/.{2,}/.test(url);
+    }
+    case 'text':   return data.text?.trim().length > 0;
+    case 'email':  return data.to?.trim().length > 0;
+    case 'phone':  return data.phone?.trim().length > 0;
+    case 'sms':    return data.phone?.trim().length > 0;
+    case 'vcard':  return (data.firstName + data.lastName + data.phone + data.email).trim().length > 0;
     default:       return false;
   }
 }
@@ -218,18 +252,24 @@ async function generateQR() {
     },
   };
 
+  // F4: cancel any previous in-flight request
+  if (abortCtrl) abortCtrl.abort();
+  abortCtrl = new AbortController();
+  const { signal } = abortCtrl;
+
   showSpinner();
 
   try {
     let result;
 
     if (logoFile) {
-      result = await generateWithLogo(data, options);
+      result = await generateWithLogo(data, options, signal);
     } else {
       const resp = await fetch('/api/generate', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body:    JSON.stringify({ type: currentType, data, options }),
+        signal,
       });
       if (!resp.ok) throw new Error(await resp.text());
       result = await resp.json();
@@ -239,28 +279,29 @@ async function generateQR() {
     saveToHistory(result, data);
 
   } catch (err) {
+    if (err.name === 'AbortError') return; // F4: silently ignore cancelled requests
     console.error('Błąd generowania QR:', err);
     showPlaceholder();
     showToast('Błąd generowania – sprawdź dane');
   }
 }
 
-async function generateWithLogo(data, options) {
+async function generateWithLogo(data, options, signal) {
   const form = new FormData();
   form.append('payload', JSON.stringify({ type: currentType, data, options }));
   form.append('logo', logoFile);
 
-  const resp = await fetch('/api/generate-with-logo', { method: 'POST', body: form });
+  const resp = await fetch('/api/generate-with-logo', { method: 'POST', body: form, signal });
   if (!resp.ok) throw new Error(await resp.text());
   return resp.json();
 }
 
 // ── Display result ────────────────────────────────────────────────────────────
 function displayQR(result, data) {
+  clearTimeout(spinnerTimeout); // U2
   qrSpinner.classList.add('hidden');
   qrPlaceholder.classList.add('hidden');
 
-  // Store for download/copy
   currentQR = { ...result, rawData: JSON.stringify(data) };
 
   if (result.format === 'svg') {
@@ -278,6 +319,7 @@ function displayQR(result, data) {
 }
 
 function showPlaceholder() {
+  clearTimeout(spinnerTimeout); // U2
   qrSpinner.classList.add('hidden');
   qrImage.classList.add('hidden');
   qrSvgWrap.classList.add('hidden');
@@ -290,35 +332,38 @@ function showPlaceholder() {
 function showSpinner() {
   qrPlaceholder.classList.add('hidden');
   qrSpinner.classList.remove('hidden');
+  // U2: auto-hide spinner after 10s to prevent infinite state
+  clearTimeout(spinnerTimeout);
+  spinnerTimeout = setTimeout(() => {
+    qrSpinner.classList.add('hidden');
+    qrPlaceholder.classList.remove('hidden');
+    showToast('Przekroczono czas oczekiwania');
+  }, 10_000);
 }
 
 // ── Download ──────────────────────────────────────────────────────────────────
 async function downloadQR(requestedFormat) {
   if (!currentQR) return;
 
-  const label = makeSafeLabel();
+  const label = `qr-${TYPE_SAFE_NAMES[currentType] || currentType}-${Date.now()}`;
 
-  // If format matches what we have, use directly
   if (requestedFormat === 'svg' && currentQR.format === 'svg') {
-    downloadBlob(
-      new Blob([currentQR.qr], { type: 'image/svg+xml' }),
-      `${label}.svg`
-    );
+    downloadBlob(new Blob([currentQR.qr], { type: 'image/svg+xml' }), `${label}.svg`);
     return;
   }
-
   if (requestedFormat === 'png' && currentQR.format === 'png') {
     downloadDataUrl(currentQR.qr, `${label}.png`);
     return;
   }
 
-  // Convert: need to re-request in the other format
+  // Re-request in the required format
   const data    = collectData();
   const options = {
     format:               requestedFormat,
     width:                parseInt(document.getElementById('opt-size').value),
     margin:               parseInt(document.getElementById('opt-margin').value),
     errorCorrectionLevel: document.getElementById('opt-ecl').value,
+    dotStyle:             currentDotStyle,
     color: {
       dark:  document.getElementById('opt-dark').value,
       light: document.getElementById('opt-light').value,
@@ -326,12 +371,15 @@ async function downloadQR(requestedFormat) {
   };
 
   try {
-    const resp = await fetch('/api/generate', {
+    const resp   = await fetch('/api/generate', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ type: currentType, data, options }),
     });
     const result = await resp.json();
+
+    // U5: keep currentQR in sync so clipboard copy reflects this format
+    currentQR = { ...currentQR, ...result };
 
     if (requestedFormat === 'svg') {
       downloadBlob(new Blob([result.qr], { type: 'image/svg+xml' }), `${label}.svg`);
@@ -345,68 +393,40 @@ async function downloadQR(requestedFormat) {
 
 function downloadDataUrl(dataUrl, filename) {
   const a = document.createElement('a');
-  a.href     = dataUrl;
-  a.download = filename;
-  a.click();
+  a.href = dataUrl; a.download = filename; a.click();
 }
 
 function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a   = document.createElement('a');
-  a.href     = url;
-  a.download = filename;
-  a.click();
+  a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 5000);
-}
-
-function makeSafeLabel() {
-  const TYPE_LABELS = {
-    wifi: 'wifi', url: 'url', text: 'tekst',
-    email: 'email', phone: 'telefon', sms: 'sms', vcard: 'kontakt',
-  };
-  return `qr-${TYPE_LABELS[currentType] || currentType}-${Date.now()}`;
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
 function saveToHistory(result, data) {
-  if (result.format !== 'png') return; // only store thumbnails for PNG
+  if (result.format !== 'png') return;
 
   const history = loadHistory();
-  const TYPE_LABELS = {
-    wifi: 'WiFi', url: 'URL', text: 'Tekst',
-    email: 'Email', phone: 'Telefon', sms: 'SMS', vcard: 'Kontakt',
-  };
-
-  // Build a preview label (exclude WiFi password)
   let preview = '';
   switch (currentType) {
-    case 'wifi':   preview = data.ssid || '–'; break;
-    case 'url':    preview = data.url  || '–'; break;
-    case 'text':   preview = (data.text || '').slice(0, 40); break;
-    case 'email':  preview = data.to   || '–'; break;
-    case 'phone':  preview = data.phone || '–'; break;
-    case 'sms':    preview = data.phone || '–'; break;
+    case 'wifi':   preview = data.ssid   || '–'; break;
+    case 'url':    preview = data.url    || '–'; break;
+    case 'text':   preview = (data.text  || '').slice(0, 40); break;
+    case 'email':  preview = data.to     || '–'; break;
+    case 'phone':  preview = data.phone  || '–'; break;
+    case 'sms':    preview = data.phone  || '–'; break;
     case 'vcard':  preview = `${data.firstName || ''} ${data.lastName || ''}`.trim() || '–'; break;
   }
 
-  history.unshift({
-    type:    currentType,
-    label:   TYPE_LABELS[currentType],
-    preview,
-    thumb:   result.qr,
-    ts:      Date.now(),
-  });
-
+  history.unshift({ type: currentType, label: TYPE_LABELS[currentType], preview, thumb: result.qr, ts: Date.now() });
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
   renderHistory();
 }
 
 function loadHistory() {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+  catch { return []; }
 }
 
 function renderHistory() {
@@ -417,33 +437,45 @@ function renderHistory() {
     return;
   }
 
-  historyList.innerHTML = history.map((item, i) => `
-    <li class="history-item" data-index="${i}" role="button" tabindex="0" title="Kliknij, aby zobaczyć ponownie">
-      <img src="${item.thumb}" alt="QR ${item.label}" loading="lazy" />
-      <div class="history-meta">
-        <strong>${item.label}</strong>
-        <span>${escapeHtml(item.preview)}</span>
-      </div>
-    </li>
-  `).join('');
+  // Q1: build DOM nodes so user content is set via textContent (no XSS risk)
+  historyList.innerHTML = '';
+  history.forEach((item, i) => {
+    const li   = document.createElement('li');
+    li.className = 'history-item';
+    li.dataset.index = i;
+    li.setAttribute('role', 'button');
+    li.setAttribute('tabindex', '0');
+    li.title = 'Kliknij, aby zobaczyć ponownie';
 
-  historyList.querySelectorAll('.history-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const item = history[el.dataset.index];
-      displayQR({ qr: item.thumb, format: 'png' }, {});
+    const img  = document.createElement('img');
+    img.src    = item.thumb;
+    img.alt    = `QR ${item.label}`;
+    img.loading = 'lazy';
+    img.width  = 40;
+    img.height = 40;
+
+    const meta   = document.createElement('div');
+    meta.className = 'history-meta';
+
+    const strong = document.createElement('strong');
+    strong.textContent = item.label;  // Q1: textContent, not innerHTML
+
+    const span = document.createElement('span');
+    span.textContent = item.preview;  // Q1: textContent, not innerHTML
+
+    meta.append(strong, span);
+    li.append(img, meta);
+    historyList.append(li);
+
+    li.addEventListener('click', () => {
+      // F2: bounds check against freshly loaded history
+      const current = loadHistory();
+      const entry   = current[Number(li.dataset.index)];
+      if (!entry) return;
+      displayQR({ qr: entry.thumb, format: 'png' }, {});
     });
-    el.addEventListener('keydown', e => {
-      if (e.key === 'Enter') el.click();
-    });
+    li.addEventListener('keydown', e => { if (e.key === 'Enter') li.click(); });
   });
-}
-
-function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────────

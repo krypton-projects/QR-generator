@@ -288,6 +288,19 @@ input[type="range"] {
   margin-top: 0.25rem;
 }
 
+/* F7: logo thumbnail preview */
+.logo-preview {
+  display: block;
+  margin-top: 0.5rem;
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 2px;
+}
+
 /* ── Preview card ───────────────────────────────────────────────────────── */
 .qr-canvas-wrap {
   position: relative;
