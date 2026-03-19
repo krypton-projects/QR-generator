@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pl" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Generator QR</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- ── HEADER ──────────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="2" y="2" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+        <rect x="14" y="2" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+        <rect x="2" y="14" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.8"/>
+        <rect x="4.5" y="4.5" width="3" height="3" rx="0.5" fill="currentColor"/>
+        <rect x="16.5" y="4.5" width="3" height="3" rx="0.5" fill="currentColor"/>
+        <rect x="4.5" y="16.5" width="3" height="3" rx="0.5" fill="currentColor"/>
+        <path d="M14 14h2v2h-2zM16 16h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" fill="currentColor"/>
+      </svg>
+      <span>Generator QR</span>
+    </div>
+    <div class="header-actions">
+      <span class="badge-local" title="Działa w 100% lokalnie">Lokalnie</span>
+      <button class="btn-icon" id="themeToggle" aria-label="Przełącz motyw" title="Przełącz motyw">
+        <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ── MAIN ─────────────────────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- LEFT: Form -->
+  <section class="panel panel-form">
+
+    <!-- Type selector -->
+    <div class="type-grid" role="group" aria-label="Typ kodu QR">
+      <button class="type-btn active" data-type="wifi">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
+        </svg>
+        WiFi
+      </button>
+      <button class="type-btn" data-type="url">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+        </svg>
+        URL
+      </button>
+      <button class="type-btn" data-type="text">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/>
+          <line x1="12" y1="4" x2="12" y2="20"/>
+        </svg>
+        Tekst
+      </button>
+      <button class="type-btn" data-type="email">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+          <polyline points="22,6 12,13 2,6"/>
+        </svg>
+        Email
+      </button>
+      <button class="type-btn" data-type="phone">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.58 1.25h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+        </svg>
+        Telefon
+      </button>
+      <button class="type-btn" data-type="sms">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        </svg>
+        SMS
+      </button>
+      <button class="type-btn" data-type="vcard">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 10a4 4 0 0 1-8 0"/>
+        </svg>
+        Kontakt
+      </button>
+    </div>
+
+    <!-- Dynamic form -->
+    <div class="form-card" id="formCard">
+
+      <!-- WiFi (default) -->
+      <div class="form-fields" id="form-wifi">
+        <div class="field-group">
+          <label for="wifi-ssid">Nazwa sieci (SSID)</label>
+          <input type="text" id="wifi-ssid" name="ssid" placeholder="MojaSiec" autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label for="wifi-password">Hasło</label>
+          <div class="input-password">
+            <input type="password" id="wifi-password" name="password" placeholder="••••••••" autocomplete="off" />
+            <button type="button" class="btn-icon-sm" id="togglePwd" aria-label="Pokaż/ukryj hasło" title="Pokaż hasło">
+              <svg class="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg class="eye-closed" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label for="wifi-security">Zabezpieczenie</label>
+            <select id="wifi-security" name="security">
+              <option value="WPA" selected>WPA/WPA2</option>
+              <option value="WEP">WEP</option>
+              <option value="nopass">Otwarta (bez hasła)</option>
+            </select>
+          </div>
+          <div class="field-group field-checkbox">
+            <label class="checkbox-label">
+              <input type="checkbox" id="wifi-hidden" name="hidden" />
+              Sieć ukryta
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- URL -->
+      <div class="form-fields hidden" id="form-url">
+        <div class="field-group">
+          <label for="url-link">Adres URL</label>
+          <input type="url" id="url-link" name="url" placeholder="https://example.com" autocomplete="off" />
+        </div>
+      </div>
+
+      <!-- Text -->
+      <div class="form-fields hidden" id="form-text">
+        <div class="field-group">
+          <label for="text-content">Treść</label>
+          <textarea id="text-content" name="text" rows="4" placeholder="Wpisz dowolny tekst…"></textarea>
+        </div>
+      </div>
+
+      <!-- Email -->
+      <div class="form-fields hidden" id="form-email">
+        <div class="field-group">
+          <label for="email-to">Do (adres email)</label>
+          <input type="email" id="email-to" name="to" placeholder="odbiorca@example.com" autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label for="email-subject">Temat</label>
+          <input type="text" id="email-subject" name="subject" placeholder="Temat wiadomości" autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label for="email-body">Treść</label>
+          <textarea id="email-body" name="body" rows="3" placeholder="Treść wiadomości…"></textarea>
+        </div>
+      </div>
+
+      <!-- Phone -->
+      <div class="form-fields hidden" id="form-phone">
+        <div class="field-group">
+          <label for="phone-number">Numer telefonu</label>
+          <input type="tel" id="phone-number" name="phone" placeholder="+48123456789" autocomplete="off" />
+        </div>
+      </div>
+
+      <!-- SMS -->
+      <div class="form-fields hidden" id="form-sms">
+        <div class="field-group">
+          <label for="sms-phone">Numer telefonu</label>
+          <input type="tel" id="sms-phone" name="phone" placeholder="+48123456789" autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label for="sms-message">Wiadomość</label>
+          <textarea id="sms-message" name="message" rows="3" placeholder="Treść SMS…"></textarea>
+        </div>
+      </div>
+
+      <!-- vCard -->
+      <div class="form-fields hidden" id="form-vcard">
+        <div class="field-row">
+          <div class="field-group">
+            <label for="vcard-first">Imię</label>
+            <input type="text" id="vcard-first" name="firstName" placeholder="Jan" autocomplete="off" />
+          </div>
+          <div class="field-group">
+            <label for="vcard-last">Nazwisko</label>
+            <input type="text" id="vcard-last" name="lastName" placeholder="Kowalski" autocomplete="off" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="vcard-phone">Telefon</label>
+          <input type="tel" id="vcard-phone" name="phone" placeholder="+48123456789" autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label for="vcard-email">Email</label>
+          <input type="email" id="vcard-email" name="email" placeholder="jan@example.com" autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label for="vcard-org">Organizacja</label>
+          <input type="text" id="vcard-org" name="org" placeholder="Firma Sp. z o.o." autocomplete="off" />
+        </div>
+        <div class="field-group">
+          <label for="vcard-url">Strona www</label>
+          <input type="url" id="vcard-url" name="url" placeholder="https://example.com" autocomplete="off" />
+        </div>
+      </div>
+
+    </div><!-- /form-card -->
+
+    <!-- Customisation -->
+    <div class="customise-card">
+      <h2 class="section-title">Wygląd</h2>
+
+      <div class="custom-grid">
+        <div class="field-group">
+          <label for="opt-dark">Kolor modułów</label>
+          <div class="color-row">
+            <input type="color" id="opt-dark" value="#000000" />
+            <span class="color-hex" id="darkHex">#000000</span>
+          </div>
+        </div>
+        <div class="field-group">
+          <label for="opt-light">Kolor tła</label>
+          <div class="color-row">
+            <input type="color" id="opt-light" value="#ffffff" />
+            <span class="color-hex" id="lightHex">#ffffff</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field-group">
+        <label for="opt-size">Rozmiar: <strong id="sizeVal">300</strong> px</label>
+        <input type="range" id="opt-size" min="100" max="1000" step="50" value="300" />
+      </div>
+
+      <div class="custom-grid">
+        <div class="field-group">
+          <label for="opt-ecl">Korekcja błędów</label>
+          <select id="opt-ecl">
+            <option value="L">L – Niska (7%)</option>
+            <option value="M" selected>M – Średnia (15%)</option>
+            <option value="Q">Q – Wysoka (25%)</option>
+            <option value="H">H – Max (30%)</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="opt-margin">Margines: <strong id="marginVal">2</strong></label>
+          <input type="range" id="opt-margin" min="0" max="10" step="1" value="2" />
+        </div>
+      </div>
+
+      <!-- Logo upload -->
+      <div class="field-group">
+        <label>Logo (opcjonalnie)</label>
+        <div class="logo-upload" id="logoDropzone">
+          <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
+          <button type="button" class="btn-outline" id="logoPickBtn">Wybierz plik</button>
+          <span class="logo-name" id="logoName">brak</span>
+          <button type="button" class="btn-icon-sm remove-logo hidden" id="logoRemove" title="Usuń logo">✕</button>
+        </div>
+        <p class="hint">PNG/JPG/SVG, max 2 MB. ECL zmieniana automatycznie na H.</p>
+      </div>
+
+    </div>
+
+  </section>
+
+  <!-- RIGHT: Preview -->
+  <section class="panel panel-preview">
+    <div class="preview-card">
+      <h2 class="section-title">Podgląd</h2>
+
+      <div class="qr-canvas-wrap" id="qrWrap">
+        <div class="qr-placeholder" id="qrPlaceholder">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" opacity="0.25">
+            <rect x="2" y="2" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="14" y="2" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="2" y="14" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="4.5" y="4.5" width="3" height="3" rx="0.5" fill="currentColor"/>
+            <rect x="16.5" y="4.5" width="3" height="3" rx="0.5" fill="currentColor"/>
+            <rect x="4.5" y="16.5" width="3" height="3" rx="0.5" fill="currentColor"/>
+            <path d="M14 14h2v2h-2zM16 16h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z" fill="currentColor"/>
+          </svg>
+          <p>Wypełnij formularz,<br/>aby wygenerować kod QR</p>
+        </div>
+        <img id="qrImage" class="qr-image hidden" alt="Wygenerowany kod QR" />
+        <div id="qrSvgWrap" class="qr-svg-wrap hidden"></div>
+        <div class="qr-spinner hidden" id="qrSpinner">
+          <div class="spinner"></div>
+        </div>
+      </div>
+
+      <div class="preview-actions" id="previewActions" style="display:none">
+        <button class="btn btn-primary" id="dlPng">PNG</button>
+        <button class="btn btn-outline" id="dlSvg">SVG</button>
+        <button class="btn btn-outline" id="copyBtn">Kopiuj dane</button>
+      </div>
+
+      <div class="format-toggle">
+        <label class="radio-label">
+          <input type="radio" name="format" value="png" checked /> PNG
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="format" value="svg" /> SVG
+        </label>
+      </div>
+
+      <div class="toast hidden" id="toast">Skopiowano!</div>
+    </div>
+
+    <!-- History -->
+    <div class="history-card" id="historyCard">
+      <div class="history-header">
+        <h2 class="section-title">Historia</h2>
+        <button class="btn-sm" id="clearHistory">Wyczyść</button>
+      </div>
+      <ul class="history-list" id="historyList">
+        <li class="history-empty">Brak historii</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
