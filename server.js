@@ -209,6 +209,36 @@ function normaliseOptions(opts = {}, defaultECL = 'M') {
   };
 }
 
+// ── Finder pattern helpers ────────────────────────────────────────────────────
+function isFinderRegion(r, c, size) {
+  return (r < 7 && c < 7) ||
+         (r < 7 && c >= size - 7) ||
+         (r >= size - 7 && c < 7);
+}
+
+function finderRect(cx, cy, n, cell, fill, rx) {
+  const half = (n / 2) * cell;
+  const x = (cx - half).toFixed(2);
+  const y = (cy - half).toFixed(2);
+  const s = (n * cell).toFixed(2);
+  return `<rect x="${x}" y="${y}" width="${s}" height="${s}" rx="${rx.toFixed(2)}" fill="${fill}"/>`;
+}
+
+function drawFinder(cx, cy, cell, dark, light, dotStyle) {
+  if (dotStyle === 'circle') {
+    return [
+      `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(3.5 * cell).toFixed(2)}" fill="${dark}"/>`,
+      `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(2.5 * cell).toFixed(2)}" fill="${light}"/>`,
+      `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(1.5 * cell).toFixed(2)}" fill="${dark}"/>`,
+    ].join('');
+  }
+  const outerRx = dotStyle === 'rounded' ? cell       : 0;
+  const innerRx = dotStyle === 'rounded' ? cell * 0.5 : 0;
+  return finderRect(cx, cy, 7, cell, dark,  outerRx)
+       + finderRect(cx, cy, 5, cell, light, outerRx * 0.6)
+       + finderRect(cx, cy, 3, cell, dark,  innerRx);
+}
+
 // ── Custom SVG builder (rounded / circle dot styles) ─────────────────────────
 function buildCustomSVG(text, qrOpts) {
   const { dotStyle, width, margin, errorCorrectionLevel, color } = qrOpts;
@@ -222,9 +252,21 @@ function buildCustomSVG(text, qrOpts) {
   const cell    = width / total;
 
   const parts = [];
+
+  // Draw the 3 finder patterns as unified shapes
+  const finderCenters = [
+    [margin + 3.5, margin + 3.5],
+    [margin + 3.5, margin + size - 3.5],
+    [margin + size - 3.5, margin + 3.5],
+  ];
+  for (const [row, col] of finderCenters) {
+    parts.push(drawFinder(col * cell, row * cell, cell, dark, light, dotStyle));
+  }
+
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       if (!modules[r * size + c]) continue;
+      if (isFinderRegion(r, c, size)) continue;
       // Convert grid coordinates to SVG pixel positions, centred on each cell
       const cx = (c + margin + 0.5) * cell;
       const cy = (r + margin + 0.5) * cell;
