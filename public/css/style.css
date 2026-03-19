@@ -139,6 +139,8 @@ a { color: var(--primary); }
 
 @media (max-width: 480px) {
   .type-grid { grid-template-columns: repeat(3, 1fr); }
+  /* UX-16: prevent text overflow in dot buttons on very narrow screens */
+  .dot-style-group { grid-template-columns: repeat(2, 1fr); }
 }
 
 .type-btn {

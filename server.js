@@ -182,6 +182,7 @@ function validateMagicBytes(buffer, mimetype) {
 function sanitizeSvgLogo(buffer) {
   let svg = buffer.toString('utf8');
   svg = svg.replace(/<script[\s\S]*?<\/script\s*>/gi, '');           // remove <script> blocks
+  svg = svg.replace(/<style[\s\S]*?<\/style\s*>/gi, '');             // SEC-20: remove <style> blocks (CSS-based vectors)
   svg = svg.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, ''); // remove on* handlers
   svg = svg.replace(/(?:href|xlink:href)\s*=\s*["'][^"']*javascript:[^"']*["']/gi, ''); // js: hrefs
   if (/<script/i.test(svg) || /javascript\s*:/i.test(svg)) {

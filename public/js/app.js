@@ -51,7 +51,8 @@ const formHint      = document.getElementById('formHint');  // U2: validation hi
 document.getElementById('themeToggle').addEventListener('click', () => {
   const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('qr-theme', next);
+  // UX-20: guard setItem against SecurityError in private-browsing mode
+  try { localStorage.setItem('qr-theme', next); } catch { /* non-persistent, still works in session */ }
 });
 
 // ── Type buttons ──────────────────────────────────────────────────────────────
