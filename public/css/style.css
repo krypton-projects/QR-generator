@@ -412,7 +412,17 @@ input[type="range"] {
   white-space: nowrap;
   z-index: 10;
 }
-.toast.show { opacity: 1; }
+/* U5: allow click-to-dismiss when visible */
+.toast.show { opacity: 1; pointer-events: auto; cursor: pointer; }
+
+/* ── Form hint ───────────────────────────────────────────────────────────── */
+/* U2: inline validation message below the active form fields */
+.form-hint {
+  font-size: 0.8rem;
+  color: #dc2626;
+  margin-top: 0.25rem;
+  padding: 0 0.1rem;
+}
 
 /* ── History ────────────────────────────────────────────────────────────── */
 .history-header {
@@ -449,7 +459,9 @@ input[type="range"] {
   cursor: pointer;
   transition: border-color var(--transition);
 }
-.history-item:hover { border-color: var(--primary); }
+.history-item:hover  { border-color: var(--primary); }
+/* U3: keyboard focus ring for history items */
+.history-item:focus  { outline: 2px solid var(--primary); outline-offset: 2px; }
 
 .history-item img {
   width: 40px;

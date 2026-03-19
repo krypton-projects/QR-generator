@@ -11,18 +11,22 @@ const open    = require('open');
 const app  = express();
 const PORT = 3000;
 
+// S4: trust reverse proxy so req.ip reflects the real client IP
+app.set('trust proxy', 1);
+
 // ── Security headers ──────────────────────────────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc:  ["'self'"],
-      styleSrc:   ["'self'", "'unsafe-inline'"],
-      imgSrc:     ["'self'", "data:", "blob:"],
-      connectSrc: ["'self'"],
-      fontSrc:    ["'self'"],
-      objectSrc:  ["'none'"],
-      frameSrc:   ["'none'"],
+      defaultSrc:     ["'self'"],
+      scriptSrc:      ["'self'"],
+      styleSrc:       ["'self'", "'unsafe-inline'"],
+      imgSrc:         ["'self'", "data:", "blob:"],
+      connectSrc:     ["'self'"],
+      fontSrc:        ["'self'"],
+      objectSrc:      ["'none'"],
+      frameSrc:       ["'none'"],
+      frameAncestors: ["'none'"],   // S5: prevent clickjacking via iframe embedding
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -31,21 +35,25 @@ app.use(helmet({
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ── Named constants (Q2) ──────────────────────────────────────────────────────
+const RATE_WIN_MS     = 60_000;          // rate-limit window (ms)
+const RATE_MAX        = 100;             // max requests per window
+const MAX_FILE_SIZE   = 2 * 1024 * 1024; // 2 MB
+const LOGO_SIZE_RATIO = 0.20;            // logo = 20 % of QR width
+const isDev           = process.env.NODE_ENV !== 'production';
+
 // ── Rate limiting (in-memory, per IP) ─────────────────────────────────────────
 const rateMap = new Map();
 function rateLimit(req, res, next) {
   const ip  = req.ip || 'unknown';
   const now = Date.now();
-  const WIN = 60_000;
-  const MAX = 100;
   const rec = rateMap.get(ip);
-  // S2: delete stale entry to prevent unbounded map growth
-  if (!rec || now - rec.start > WIN) {
+  if (!rec || now - rec.start > RATE_WIN_MS) {
     rateMap.delete(ip);
     rateMap.set(ip, { count: 1, start: now });
     return next();
   }
-  if (rec.count >= MAX) return res.status(429).json({ error: 'Too many requests' });
+  if (rec.count >= RATE_MAX) return res.status(429).json({ error: 'Too many requests' });
   rec.count++;
   next();
 }
@@ -53,7 +61,6 @@ function rateLimit(req, res, next) {
 // ── QR data formatters ────────────────────────────────────────────────────────
 const ALLOWED_TYPES = ['url', 'wifi', 'text', 'email', 'phone', 'sms', 'vcard'];
 
-// S1: escape special chars per each format's spec
 function escapeWifi(s) {
   return String(s).replace(/[\\;,"]/g, c => '\\' + c);
 }
@@ -73,7 +80,6 @@ function buildQRData(type, data) {
 
     case 'wifi': {
       const { ssid = '', password = '', security = 'WPA', hidden = false } = data;
-      // NOTE: password intentionally not logged anywhere
       return `WIFI:T:${security};S:${escapeWifi(ssid)};P:${escapeWifi(password)};H:${hidden ? 'true' : 'false'};;`;
     }
 
@@ -108,7 +114,7 @@ function buildQRData(type, data) {
         phone ? `TEL:${escapeVCard(phone)}`   : null,
         email ? `EMAIL:${escapeVCard(email)}` : null,
         org   ? `ORG:${escapeVCard(org)}`     : null,
-        url   ? `URL:${url}`                  : null,
+        url   ? `URL:${escapeVCard(url)}`     : null,  // F1: was missing escapeVCard
         'END:VCARD',
       ].filter(Boolean).join('\n');
     }
@@ -118,15 +124,47 @@ function buildQRData(type, data) {
   }
 }
 
-// ── Multer: memory only, images ≤ 2 MB ───────────────────────────────────────
+// ── Multer: memory only, images ≤ MAX_FILE_SIZE ───────────────────────────────
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp']);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits:  { fileSize: 2 * 1024 * 1024 },
+  limits:  { fileSize: MAX_FILE_SIZE },
   fileFilter(_req, file, cb) {
     cb(null, ALLOWED_MIME.has(file.mimetype));
   },
 });
+
+// ── Magic byte validation (S2) ────────────────────────────────────────────────
+// MIME type from the client can be spoofed; verify the actual file headers.
+const MAGIC_CHECKS = {
+  'image/png':     buf => buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47,
+  'image/jpeg':    buf => buf[0] === 0xFF && buf[1] === 0xD8,
+  'image/webp':    buf => buf.slice(0, 4).toString('ascii') === 'RIFF' &&
+                          buf.slice(8, 12).toString('ascii') === 'WEBP',
+  'image/svg+xml': buf => {
+    // SVG is XML text with no fixed binary magic; require <svg or <?xml preamble
+    const head = buf.slice(0, 512).toString('utf8').trimStart();
+    return /<svg[\s>]/i.test(head) || head.startsWith('<?xml');
+  },
+};
+
+function validateMagicBytes(buffer, mimetype) {
+  const check = MAGIC_CHECKS[mimetype];
+  return check ? check(buffer) : false;
+}
+
+// ── SVG logo sanitizer (S3) ───────────────────────────────────────────────────
+// Strip dangerous constructs from user-uploaded SVG files before rasterising.
+function sanitizeSvgLogo(buffer) {
+  let svg = buffer.toString('utf8');
+  svg = svg.replace(/<script[\s\S]*?<\/script\s*>/gi, '');           // remove <script> blocks
+  svg = svg.replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, ''); // remove on* handlers
+  svg = svg.replace(/(?:href|xlink:href)\s*=\s*["'][^"']*javascript:[^"']*["']/gi, ''); // js: hrefs
+  if (/<script/i.test(svg) || /javascript\s*:/i.test(svg)) {
+    throw new Error('SVG zawiera niedozwoloną treść');
+  }
+  return Buffer.from(svg);
+}
 
 // ── Helper: normalise options ─────────────────────────────────────────────────
 const VALID_DOT_STYLES = ['square', 'rounded', 'circle'];
@@ -163,6 +201,7 @@ function buildCustomSVG(text, qrOpts) {
   for (let r = 0; r < size; r++) {
     for (let c = 0; c < size; c++) {
       if (!modules[r * size + c]) continue;
+      // Convert grid coordinates to SVG pixel positions, centred on each cell
       const cx = (c + margin + 0.5) * cell;
       const cy = (r + margin + 0.5) * cell;
 
@@ -176,7 +215,6 @@ function buildCustomSVG(text, qrOpts) {
         const y  = (cy - s / 2).toFixed(2);
         parts.push(`<rect x="${x}" y="${y}" width="${s.toFixed(2)}" height="${s.toFixed(2)}" rx="${rx}" fill="${dark}"/>`);
       } else {
-        // Q3: use center coords for consistency with rounded/circle
         const x = (cx - cell / 2).toFixed(2);
         const y = (cy - cell / 2).toFixed(2);
         parts.push(`<rect x="${x}" y="${y}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" fill="${dark}"/>`);
@@ -196,7 +234,6 @@ app.post('/api/generate', rateLimit, async (req, res) => {
       return res.status(400).json({ error: 'Nieprawidłowy typ QR' });
 
     const qrData = buildQRData(type, data || {});
-    // S4: empty string is falsy only via trim check
     if (!qrData || !qrData.trim())
       return res.status(400).json({ error: 'Brak danych do zakodowania' });
 
@@ -206,13 +243,12 @@ app.post('/api/generate', rateLimit, async (req, res) => {
     const { dotStyle } = qrOpts;
     const useCustom = dotStyle !== 'square';
 
-    // Log only metadata – never the actual QR content
-    console.log(`[QR] type=${type} format=${format} size=${qrOpts.width} dots=${dotStyle}`);
+    // Q1: per-request metadata only in development
+    if (isDev) console.log(`[QR] type=${type} format=${format} size=${qrOpts.width} dots=${dotStyle}`);
 
     if (useCustom || format === 'svg') {
       const svg = buildCustomSVG(qrData, qrOpts);
       if (format === 'svg') return res.json({ qr: svg, format: 'svg' });
-      // Convert custom SVG → PNG via sharp
       const pngBuf = await sharp(Buffer.from(svg)).png().toBuffer();
       return res.json({ qr: `data:image/png;base64,${pngBuf.toString('base64')}`, format: 'png' });
     }
@@ -231,7 +267,6 @@ app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req
   try {
     let payload = {};
     try { payload = JSON.parse(req.body.payload || '{}'); } catch (e) {
-      // S6: return explicit error instead of silently using empty payload
       console.error('[QR] Nieprawidłowy JSON payload:', e.message);
       return res.status(400).json({ error: 'Nieprawidłowy format danych' });
     }
@@ -245,10 +280,9 @@ app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req
     if (!qrData || !qrData.trim())
       return res.status(400).json({ error: 'Brak danych do zakodowania' });
 
-    // Use H error correction when logo covers the center
-    const qrOpts  = normaliseOptions(options, 'H');
+    const qrOpts    = normaliseOptions(options, 'H');
     const useCustom = qrOpts.dotStyle !== 'square';
-    const qrBuffer = useCustom
+    const qrBuffer  = useCustom
       ? await sharp(Buffer.from(buildCustomSVG(qrData, qrOpts))).png().toBuffer()
       : await QRCode.toBuffer(qrData, qrOpts);
 
@@ -259,9 +293,24 @@ app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req
       });
     }
 
-    // Resize logo to ~20 % of QR width, preserve transparency
-    const logoSize = Math.floor(qrOpts.width * 0.20);
-    const logoResized = await sharp(req.file.buffer)
+    // S2: validate file magic bytes to prevent MIME spoofing
+    if (!validateMagicBytes(req.file.buffer, req.file.mimetype)) {
+      return res.status(400).json({ error: 'Nieprawidłowy format pliku' });
+    }
+
+    // S3: sanitize SVG logos before passing to sharp
+    let logoBuffer = req.file.buffer;
+    if (req.file.mimetype === 'image/svg+xml') {
+      try {
+        logoBuffer = sanitizeSvgLogo(logoBuffer);
+      } catch {
+        return res.status(400).json({ error: 'Plik SVG zawiera niedozwoloną treść' });
+      }
+    }
+
+    // Resize logo to LOGO_SIZE_RATIO of QR width, preserve transparency
+    const logoSize    = Math.floor(qrOpts.width * LOGO_SIZE_RATIO);
+    const logoResized = await sharp(logoBuffer)
       .resize(logoSize, logoSize, {
         fit: 'contain',
         background: { r: 255, g: 255, b: 255, alpha: 0 },
@@ -274,7 +323,7 @@ app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req
       .png()
       .toBuffer();
 
-    console.log(`[QR] type=${type} format=png+logo size=${qrOpts.width}`);
+    if (isDev) console.log(`[QR] type=${type} format=png+logo size=${qrOpts.width}`);
     res.json({
       qr: `data:image/png;base64,${composited.toString('base64')}`,
       format: 'png',

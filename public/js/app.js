@@ -6,8 +6,8 @@ let currentQR       = null;   // { qr, format, rawData }
 let logoFile        = null;
 let generateTimer   = null;
 let currentDotStyle = 'square';
-let abortCtrl       = null;   // F4: cancel in-flight requests
-let spinnerTimeout  = null;   // U2: prevent infinite spinner
+let abortCtrl       = null;   // cancel in-flight requests
+let spinnerTimeout  = null;   // prevent infinite spinner
 
 // Q2: single source of truth for type labels
 const TYPE_LABELS = {
@@ -35,6 +35,7 @@ const marginVal     = document.getElementById('marginVal');
 const darkHex       = document.getElementById('darkHex');
 const lightHex      = document.getElementById('lightHex');
 const togglePwdBtn  = document.getElementById('togglePwd');
+const formHint      = document.getElementById('formHint');  // U2: validation hint
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 (function initTheme() {
@@ -103,7 +104,7 @@ document.querySelectorAll('.dot-btn').forEach(btn => {
   });
 });
 
-// ── Password toggle (U3: aria-pressed) ───────────────────────────────────────
+// ── Password toggle ───────────────────────────────────────────────────────────
 togglePwdBtn.addEventListener('click', () => {
   const input    = document.getElementById('wifi-password');
   const isHidden = input.type === 'password';
@@ -113,7 +114,7 @@ togglePwdBtn.addEventListener('click', () => {
   document.querySelector('.eye-closed').style.display = isHidden ? '' : 'none';
 });
 
-// ── Logo upload (F7: thumbnail preview) ───────────────────────────────────────
+// ── Logo upload ───────────────────────────────────────────────────────────────
 document.getElementById('logoPickBtn').addEventListener('click', () =>
   document.getElementById('logoFile').click()
 );
@@ -125,7 +126,6 @@ document.getElementById('logoFile').addEventListener('change', e => {
   document.getElementById('logoName').textContent = file.name;
   document.getElementById('logoRemove').classList.remove('hidden');
 
-  // F7: show thumbnail
   const preview = document.getElementById('logoPreview');
   const reader  = new FileReader();
   reader.onload = ev => {
@@ -206,24 +206,67 @@ function collectData() {
   }
 }
 
-function hasEnoughData(data) {
+// U2: returns null when data is sufficient, or a hint string why it isn't
+function getValidationError(data) {
   switch (currentType) {
     case 'wifi':
-      // F5: require password when network is secured
-      return data.ssid?.trim().length > 0 &&
-             (data.security === 'nopass' || data.password?.length > 0);
+      if (!data.ssid?.trim()) return 'Podaj nazwę sieci (SSID).';
+      if (data.security !== 'nopass' && !data.password?.length) return 'Podaj hasło sieci.';
+      return null;
+
     case 'url': {
-      // F6: require valid URL format
       const url = data.url?.trim() || '';
-      return url.length > 0 && /^https?:\/\/.{2,}/.test(url);
+      if (!url) return 'Podaj adres URL.';
+      // F2: validate URL structure with the browser URL API
+      try {
+        const parsed = new URL(url);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return 'URL musi zaczynać się od http:// lub https://.';
+        }
+      } catch {
+        return 'Nieprawidłowy format URL (np. https://example.com).';
+      }
+      return null;
     }
-    case 'text':   return data.text?.trim().length > 0;
-    case 'email':  return data.to?.trim().length > 0;
-    case 'phone':  return data.phone?.trim().length > 0;
-    case 'sms':    return data.phone?.trim().length > 0;
-    case 'vcard':  return (data.firstName + data.lastName + data.phone + data.email).trim().length > 0;
-    default:       return false;
+
+    case 'text':
+      return data.text?.trim() ? null : 'Wpisz treść tekstu.';
+
+    case 'email': {
+      // U4: validate email format, not just non-empty
+      const email = data.to?.trim() || '';
+      if (!email) return 'Podaj adres email odbiorcy.';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Nieprawidłowy format adresu email.';
+      return null;
+    }
+
+    case 'phone': {
+      // U6: basic phone format validation
+      const phone = data.phone?.trim() || '';
+      if (!phone) return 'Podaj numer telefonu.';
+      if (!/^\+?[\d\s\-().]{6,20}$/.test(phone)) return 'Nieprawidłowy format numeru (np. +48123456789).';
+      return null;
+    }
+
+    case 'sms': {
+      // U6: basic phone format validation for SMS
+      const phone = data.phone?.trim() || '';
+      if (!phone) return 'Podaj numer telefonu.';
+      if (!/^\+?[\d\s\-().]{6,20}$/.test(phone)) return 'Nieprawidłowy format numeru (np. +48123456789).';
+      return null;
+    }
+
+    case 'vcard':
+      return (data.firstName + data.lastName + data.phone + data.email).trim()
+        ? null : 'Podaj co najmniej jedno pole kontaktu.';
+
+    default:
+      return 'Brak danych.';
   }
+}
+
+function hasEnoughData(data) {
+  return getValidationError(data) === null;
 }
 
 // ── Debounced generation trigger ──────────────────────────────────────────────
@@ -234,8 +277,21 @@ function scheduleGenerate() {
 
 // ── Generate QR ───────────────────────────────────────────────────────────────
 async function generateQR() {
-  const data = collectData();
-  if (!hasEnoughData(data)) {
+  const data  = collectData();
+  const error = getValidationError(data);
+
+  // U2: show/hide inline validation hint
+  if (formHint) {
+    if (error) {
+      formHint.textContent = error;
+      formHint.classList.remove('hidden');
+    } else {
+      formHint.textContent = '';
+      formHint.classList.add('hidden');
+    }
+  }
+
+  if (error) {
     showPlaceholder();
     return;
   }
@@ -252,7 +308,7 @@ async function generateQR() {
     },
   };
 
-  // F4: cancel any previous in-flight request
+  // Cancel any previous in-flight request
   if (abortCtrl) abortCtrl.abort();
   abortCtrl = new AbortController();
   const { signal } = abortCtrl;
@@ -279,7 +335,7 @@ async function generateQR() {
     saveToHistory(result, data);
 
   } catch (err) {
-    if (err.name === 'AbortError') return; // F4: silently ignore cancelled requests
+    if (err.name === 'AbortError') return; // silently ignore cancelled requests
     console.error('Błąd generowania QR:', err);
     showPlaceholder();
     showToast('Błąd generowania – sprawdź dane');
@@ -298,7 +354,7 @@ async function generateWithLogo(data, options, signal) {
 
 // ── Display result ────────────────────────────────────────────────────────────
 function displayQR(result, data) {
-  clearTimeout(spinnerTimeout); // U2
+  clearTimeout(spinnerTimeout);
   qrSpinner.classList.add('hidden');
   qrPlaceholder.classList.add('hidden');
 
@@ -307,7 +363,18 @@ function displayQR(result, data) {
   if (result.format === 'svg') {
     qrImage.classList.add('hidden');
     qrSvgWrap.classList.remove('hidden');
-    qrSvgWrap.innerHTML = result.qr;
+
+    // S1: use DOMParser instead of innerHTML to avoid potential XSS
+    const parser = new DOMParser();
+    const doc    = parser.parseFromString(result.qr, 'image/svg+xml');
+    const svgEl  = doc.documentElement;
+    // DOMParser signals parse errors via a <parsererror> element
+    if (svgEl.nodeName === 'parsererror' || svgEl.querySelector('parsererror')) {
+      showPlaceholder();
+      return;
+    }
+    qrSvgWrap.innerHTML = '';
+    qrSvgWrap.appendChild(document.importNode(svgEl, true));
   } else {
     qrSvgWrap.classList.add('hidden');
     qrSvgWrap.innerHTML = '';
@@ -319,7 +386,7 @@ function displayQR(result, data) {
 }
 
 function showPlaceholder() {
-  clearTimeout(spinnerTimeout); // U2
+  clearTimeout(spinnerTimeout);
   qrSpinner.classList.add('hidden');
   qrImage.classList.add('hidden');
   qrSvgWrap.classList.add('hidden');
@@ -332,7 +399,7 @@ function showPlaceholder() {
 function showSpinner() {
   qrPlaceholder.classList.add('hidden');
   qrSpinner.classList.remove('hidden');
-  // U2: auto-hide spinner after 10s to prevent infinite state
+  // auto-hide spinner after 10 s to prevent infinite state
   clearTimeout(spinnerTimeout);
   spinnerTimeout = setTimeout(() => {
     qrSpinner.classList.add('hidden');
@@ -371,14 +438,15 @@ async function downloadQR(requestedFormat) {
   };
 
   try {
-    const resp   = await fetch('/api/generate', {
+    const resp = await fetch('/api/generate', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({ type: currentType, data, options }),
     });
+    // F3: check HTTP status before parsing response body
+    if (!resp.ok) throw new Error(await resp.text());
     const result = await resp.json();
 
-    // U5: keep currentQR in sync so clipboard copy reflects this format
     currentQR = { ...currentQR, ...result };
 
     if (requestedFormat === 'svg') {
@@ -419,7 +487,9 @@ function saveToHistory(result, data) {
     case 'vcard':  preview = `${data.firstName || ''} ${data.lastName || ''}`.trim() || '–'; break;
   }
 
-  history.unshift({ type: currentType, label: TYPE_LABELS[currentType], preview, thumb: result.qr, ts: Date.now() });
+  // F4: use a unique id (ts + random) so stale index from another tab can't cause mismatches
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  history.unshift({ id, type: currentType, label: TYPE_LABELS[currentType], preview, thumb: result.qr, ts: Date.now() });
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
   renderHistory();
 }
@@ -437,12 +507,12 @@ function renderHistory() {
     return;
   }
 
-  // Q1: build DOM nodes so user content is set via textContent (no XSS risk)
   historyList.innerHTML = '';
-  history.forEach((item, i) => {
+  history.forEach(item => {
     const li   = document.createElement('li');
     li.className = 'history-item';
-    li.dataset.index = i;
+    // F4: store unique id instead of mutable index for safe lookup
+    li.dataset.historyId = item.id || String(item.ts);
     li.setAttribute('role', 'button');
     li.setAttribute('tabindex', '0');
     li.title = 'Kliknij, aby zobaczyć ponownie';
@@ -458,19 +528,19 @@ function renderHistory() {
     meta.className = 'history-meta';
 
     const strong = document.createElement('strong');
-    strong.textContent = item.label;  // Q1: textContent, not innerHTML
+    strong.textContent = item.label;
 
     const span = document.createElement('span');
-    span.textContent = item.preview;  // Q1: textContent, not innerHTML
+    span.textContent = item.preview;
 
     meta.append(strong, span);
     li.append(img, meta);
     historyList.append(li);
 
     li.addEventListener('click', () => {
-      // F2: bounds check against freshly loaded history
+      // F4: look up by unique id, immune to concurrent tab modifications
       const current = loadHistory();
-      const entry   = current[Number(li.dataset.index)];
+      const entry   = current.find(e => (e.id || String(e.ts)) === li.dataset.historyId);
       if (!entry) return;
       displayQR({ qr: entry.thumb, format: 'png' }, {});
     });
@@ -484,5 +554,12 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+  // U5: extended duration (3.5 s) and click-to-dismiss
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
 }
+
+// U5: clicking the toast dismisses it immediately
+toast.addEventListener('click', () => {
+  clearTimeout(toastTimer);
+  toast.classList.remove('show');
+});

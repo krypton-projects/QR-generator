@@ -152,7 +152,7 @@
       <div class="form-fields hidden" id="form-text">
         <div class="field-group">
           <label for="text-content">Treść</label>
-          <textarea id="text-content" name="text" rows="4" placeholder="Wpisz dowolny tekst…"></textarea>
+          <textarea id="text-content" name="text" rows="4" maxlength="900" placeholder="Wpisz dowolny tekst…"></textarea>
         </div>
       </div>
 
@@ -168,7 +168,7 @@
         </div>
         <div class="field-group">
           <label for="email-body">Treść</label>
-          <textarea id="email-body" name="body" rows="3" placeholder="Treść wiadomości…"></textarea>
+          <textarea id="email-body" name="body" rows="3" maxlength="500" placeholder="Treść wiadomości…"></textarea>
         </div>
       </div>
 
@@ -188,7 +188,7 @@
         </div>
         <div class="field-group">
           <label for="sms-message">Wiadomość</label>
-          <textarea id="sms-message" name="message" rows="3" placeholder="Treść SMS…"></textarea>
+          <textarea id="sms-message" name="message" rows="3" maxlength="160" placeholder="Treść SMS…"></textarea>
         </div>
       </div>
 
@@ -221,6 +221,9 @@
           <input type="url" id="vcard-url" name="url" placeholder="https://example.com" autocomplete="off" />
         </div>
       </div>
+
+      <!-- U2: inline validation hint shown when form is incomplete -->
+      <p id="formHint" class="form-hint hidden" role="alert" aria-live="polite"></p>
 
     </div><!-- /form-card -->
 
@@ -374,8 +377,8 @@
         <button class="btn btn-outline" id="copyBtn">Kopiuj dane</button>
       </div>
 
-      <!-- U1: aria-live so screen readers announce toast messages -->
-      <div class="toast hidden" id="toast" role="status" aria-live="polite"></div>
+      <!-- U5: toast is click-to-dismiss (pointer-events enabled in .show) -->
+      <div class="toast hidden" id="toast" role="status" aria-live="polite" title="Kliknij, aby zamknąć"></div>
     </div>
 
     <!-- History -->
