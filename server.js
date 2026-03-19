@@ -27,6 +27,9 @@ app.use(helmet({
       objectSrc:      ["'none'"],
       frameSrc:       ["'none'"],
       frameAncestors: ["'none'"],   // S5: prevent clickjacking via iframe embedding
+      baseUri:        ["'self'"],   // SEC-03: prevent base tag injection
+      formAction:     ["'self'"],   // SEC-03: restrict form submission targets
+      workerSrc:      ["'self'"],   // SEC-03: restrict Web Worker sources
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -38,8 +41,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ── Named constants (Q2) ──────────────────────────────────────────────────────
 const RATE_WIN_MS     = 60_000;          // rate-limit window (ms)
 const RATE_MAX        = 100;             // max requests per window
+const MAX_RATE_IPS    = 10_000;          // SEC-01: cap rateMap size to prevent memory DoS
 const MAX_FILE_SIZE   = 2 * 1024 * 1024; // 2 MB
 const LOGO_SIZE_RATIO = 0.20;            // logo = 20 % of QR width
+const SHARP_TIMEOUT_MS = 5_000;          // SEC-04: max time for sharp image processing
 const isDev           = process.env.NODE_ENV !== 'production';
 
 // ── Rate limiting (in-memory, per IP) ─────────────────────────────────────────
@@ -49,6 +54,10 @@ function rateLimit(req, res, next) {
   const now = Date.now();
   const rec = rateMap.get(ip);
   if (!rec || now - rec.start > RATE_WIN_MS) {
+    // SEC-01: evict oldest entry when map is full to prevent unbounded memory growth
+    if (rateMap.size >= MAX_RATE_IPS) {
+      rateMap.delete(rateMap.keys().next().value);
+    }
     rateMap.delete(ip);
     rateMap.set(ip, { count: 1, start: now });
     return next();
@@ -56,6 +65,16 @@ function rateLimit(req, res, next) {
   if (rec.count >= RATE_MAX) return res.status(429).json({ error: 'Too many requests' });
   rec.count++;
   next();
+}
+
+// SEC-04: wrap sharp toBuffer() with a timeout to prevent hanging on large/malicious files
+function withSharpTimeout(sharpInstance) {
+  return Promise.race([
+    sharpInstance.toBuffer(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Sharp processing timeout')), SHARP_TIMEOUT_MS)
+    ),
+  ]);
 }
 
 // ── QR data formatters ────────────────────────────────────────────────────────
@@ -143,8 +162,9 @@ const MAGIC_CHECKS = {
                           buf.slice(8, 12).toString('ascii') === 'WEBP',
   'image/svg+xml': buf => {
     // SVG is XML text with no fixed binary magic; require <svg or <?xml preamble
+    // SEC-02: also match <svg: namespace prefix and self-closing <svg/>
     const head = buf.slice(0, 512).toString('utf8').trimStart();
-    return /<svg[\s>]/i.test(head) || head.startsWith('<?xml');
+    return /^\s*(<\?xml|<svg[\s\/>:])/i.test(head);
   },
 };
 
@@ -249,7 +269,7 @@ app.post('/api/generate', rateLimit, async (req, res) => {
     if (useCustom || format === 'svg') {
       const svg = buildCustomSVG(qrData, qrOpts);
       if (format === 'svg') return res.json({ qr: svg, format: 'svg' });
-      const pngBuf = await sharp(Buffer.from(svg)).png().toBuffer();
+      const pngBuf = await withSharpTimeout(sharp(Buffer.from(svg)).png());
       return res.json({ qr: `data:image/png;base64,${pngBuf.toString('base64')}`, format: 'png' });
     }
 
@@ -283,7 +303,7 @@ app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req
     const qrOpts    = normaliseOptions(options, 'H');
     const useCustom = qrOpts.dotStyle !== 'square';
     const qrBuffer  = useCustom
-      ? await sharp(Buffer.from(buildCustomSVG(qrData, qrOpts))).png().toBuffer()
+      ? await withSharpTimeout(sharp(Buffer.from(buildCustomSVG(qrData, qrOpts))).png())
       : await QRCode.toBuffer(qrData, qrOpts);
 
     if (!req.file) {
@@ -310,18 +330,20 @@ app.post('/api/generate-with-logo', rateLimit, upload.single('logo'), async (req
 
     // Resize logo to LOGO_SIZE_RATIO of QR width, preserve transparency
     const logoSize    = Math.floor(qrOpts.width * LOGO_SIZE_RATIO);
-    const logoResized = await sharp(logoBuffer)
-      .resize(logoSize, logoSize, {
-        fit: 'contain',
-        background: { r: 255, g: 255, b: 255, alpha: 0 },
-      })
-      .png()
-      .toBuffer();
+    const logoResized = await withSharpTimeout(
+      sharp(logoBuffer)
+        .resize(logoSize, logoSize, {
+          fit: 'contain',
+          background: { r: 255, g: 255, b: 255, alpha: 0 },
+        })
+        .png()
+    );
 
-    const composited = await sharp(qrBuffer)
-      .composite([{ input: logoResized, gravity: 'center', blend: 'over' }])
-      .png()
-      .toBuffer();
+    const composited = await withSharpTimeout(
+      sharp(qrBuffer)
+        .composite([{ input: logoResized, gravity: 'center', blend: 'over' }])
+        .png()
+    );
 
     if (isDev) console.log(`[QR] type=${type} format=png+logo size=${qrOpts.width}`);
     res.json({

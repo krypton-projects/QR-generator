@@ -153,6 +153,7 @@
         <div class="field-group">
           <label for="text-content">Treść</label>
           <textarea id="text-content" name="text" rows="4" maxlength="900" placeholder="Wpisz dowolny tekst…"></textarea>
+          <span class="char-counter" id="textCounter"><span id="textCount">0</span>/900</span>
         </div>
       </div>
 
@@ -169,6 +170,7 @@
         <div class="field-group">
           <label for="email-body">Treść</label>
           <textarea id="email-body" name="body" rows="3" maxlength="500" placeholder="Treść wiadomości…"></textarea>
+          <span class="char-counter" id="emailBodyCounter"><span id="emailBodyCount">0</span>/500</span>
         </div>
       </div>
 
@@ -189,6 +191,7 @@
         <div class="field-group">
           <label for="sms-message">Wiadomość</label>
           <textarea id="sms-message" name="message" rows="3" maxlength="160" placeholder="Treść SMS…"></textarea>
+          <span class="char-counter" id="smsMessageCounter"><span id="smsMessageCount">0</span>/160</span>
         </div>
       </div>
 
@@ -235,14 +238,14 @@
         <div class="field-group">
           <label for="opt-dark">Kolor modułów</label>
           <div class="color-row">
-            <input type="color" id="opt-dark" value="#000000" />
+            <input type="color" id="opt-dark" value="#000000" aria-describedby="darkHex" />
             <span class="color-hex" id="darkHex">#000000</span>
           </div>
         </div>
         <div class="field-group">
           <label for="opt-light">Kolor tła</label>
           <div class="color-row">
-            <input type="color" id="opt-light" value="#ffffff" />
+            <input type="color" id="opt-light" value="#ffffff" aria-describedby="lightHex" />
             <span class="color-hex" id="lightHex">#ffffff</span>
           </div>
         </div>
@@ -325,7 +328,7 @@
           <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden />
           <button type="button" class="btn-outline" id="logoPickBtn">Wybierz plik</button>
           <span class="logo-name" id="logoName">brak</span>
-          <button type="button" class="btn-icon-sm remove-logo hidden" id="logoRemove" title="Usuń logo">✕</button>
+          <button type="button" class="btn-icon-sm remove-logo hidden" id="logoRemove" title="Usuń logo" aria-label="Usuń wybrane logo">✕</button>
         </div>
         <!-- F7: thumbnail preview of selected logo -->
         <img id="logoPreview" class="logo-preview hidden" alt="Podgląd logo" />
@@ -384,7 +387,7 @@
     <!-- History -->
     <div class="history-card" id="historyCard">
       <div class="history-header">
-        <h2 class="section-title">Historia</h2>
+        <h2 class="section-title">Historia <span id="historyCount" aria-live="polite"></span></h2>
         <button class="btn-sm" id="clearHistory">Wyczyść</button>
       </div>
       <ul class="history-list" id="historyList">

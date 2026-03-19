@@ -21,7 +21,7 @@
   --surface2:   #162032;
   --border:     #334155;
   --text:       #f1f5f9;
-  --text-muted: #94a3b8;
+  --text-muted: #a8b5c7;  /* UX-01: bumped from #94a3b8 → ≥4.5:1 on --surface2 */
   --shadow:     0 2px 12px rgba(0,0,0,.4);
   --shadow-lg:  0 8px 32px rgba(0,0,0,.5);
 }
@@ -161,6 +161,12 @@ a { color: var(--primary); }
   border-color: var(--primary);
   color: var(--primary);
   background: var(--surface);
+}
+
+/* UX-02: keyboard focus ring – WCAG 2.4.7 */
+.type-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .type-btn.active {
@@ -424,6 +430,17 @@ input[type="range"] {
   padding: 0 0.1rem;
 }
 
+/* ── Char counter ────────────────────────────────────────────────────────── */
+/* UX-06: character counter shown below textareas with maxlength */
+.char-counter {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 0.2rem;
+}
+.char-counter.near-limit { color: #d97706; }
+.char-counter.at-limit   { color: #dc2626; font-weight: 600; }
+
 /* ── History ────────────────────────────────────────────────────────────── */
 .history-header {
   display: flex;
@@ -606,6 +623,12 @@ input[type="range"] {
   background: var(--surface);
 }
 
+/* UX-02: keyboard focus ring – WCAG 2.4.7 */
+.dot-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 .dot-btn.active {
   border-color: var(--primary);
   background: #ede9fe;
@@ -617,3 +640,10 @@ input[type="range"] {
 }
 
 .hidden { display: none !important; }
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+/* UX-13: respect prefers-reduced-motion system setting */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+  .spinner { animation: spin 1.5s linear infinite !important; }
+}

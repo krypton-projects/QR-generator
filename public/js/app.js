@@ -39,8 +39,13 @@ const formHint      = document.getElementById('formHint');  // U2: validation hi
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 (function initTheme() {
-  const saved = localStorage.getItem('qr-theme') || 'light';
-  document.documentElement.setAttribute('data-theme', saved);
+  // UX-06 (localStorage): guard against SecurityError in private-browsing mode
+  try {
+    const saved = localStorage.getItem('qr-theme') || 'light';
+    document.documentElement.setAttribute('data-theme', saved);
+  } catch {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
 })();
 
 document.getElementById('themeToggle').addEventListener('click', () => {
@@ -101,6 +106,24 @@ document.querySelectorAll('.dot-btn').forEach(btn => {
     btn.classList.add('active');
     currentDotStyle = btn.dataset.dot;
     scheduleGenerate();
+  });
+});
+
+// ── Char counters (UX-06) ─────────────────────────────────────────────────
+[
+  { textarea: 'text-content',  count: 'textCount',       wrapper: 'textCounter',       max: 900 },
+  { textarea: 'email-body',    count: 'emailBodyCount',   wrapper: 'emailBodyCounter',  max: 500 },
+  { textarea: 'sms-message',   count: 'smsMessageCount',  wrapper: 'smsMessageCounter', max: 160 },
+].forEach(({ textarea, count, wrapper, max }) => {
+  const ta  = document.getElementById(textarea);
+  const cnt = document.getElementById(count);
+  const wrap = document.getElementById(wrapper);
+  if (!ta || !cnt || !wrap) return;
+  ta.addEventListener('input', () => {
+    const len = ta.value.length;
+    cnt.textContent = len;
+    wrap.className = 'char-counter' +
+      (len >= max ? ' at-limit' : len >= max * 0.9 ? ' near-limit' : '');
   });
 });
 
@@ -404,7 +427,8 @@ function showSpinner() {
   spinnerTimeout = setTimeout(() => {
     qrSpinner.classList.add('hidden');
     qrPlaceholder.classList.remove('hidden');
-    showToast('Przekroczono czas oczekiwania');
+    // UX-08: actionable message so user knows what to do
+    showToast('Przekroczono czas oczekiwania. Spróbuj ponownie lub zmień parametry.');
   }, 10_000);
 }
 
@@ -412,7 +436,8 @@ function showSpinner() {
 async function downloadQR(requestedFormat) {
   if (!currentQR) return;
 
-  const label = `qr-${TYPE_SAFE_NAMES[currentType] || currentType}-${Date.now()}`;
+  // UX-10: sanitize filename – strip characters unsafe on Windows/Linux filesystems
+  const label = `qr-${(TYPE_SAFE_NAMES[currentType] || 'qr').replace(/[^a-z0-9-]/gi, '')}-${Date.now()}`;
 
   if (requestedFormat === 'svg' && currentQR.format === 'svg') {
     downloadBlob(new Blob([currentQR.qr], { type: 'image/svg+xml' }), `${label}.svg`);
@@ -501,6 +526,10 @@ function loadHistory() {
 
 function renderHistory() {
   const history = loadHistory();
+
+  // UX-09: show item count so user knows older entries are evicted after 10
+  const countEl = document.getElementById('historyCount');
+  if (countEl) countEl.textContent = history.length ? `(${history.length}/10)` : '';
 
   if (!history.length) {
     historyList.innerHTML = '<li class="history-empty">Brak historii</li>';
