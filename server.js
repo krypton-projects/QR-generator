@@ -6,7 +6,6 @@ const multer  = require('multer');
 const QRCode  = require('qrcode');
 const sharp   = require('sharp');
 const path    = require('path');
-const open    = require('open');
 
 const app  = express();
 const PORT = 3000;
@@ -367,7 +366,7 @@ app.listen(PORT, '127.0.0.1', () => {
   const url = `http://localhost:${PORT}`;
   console.log(`\n  Lokalny generator QR działa na: ${url}`);
   console.log('  Dane przetwarzane wyłącznie lokalnie – nic nie opuszcza maszyny.\n');
-  open(url).catch(() => {
+  import('open').then(({ default: open }) => open(url)).catch(() => {
     console.log(`  Otwórz ręcznie: ${url}`);
   });
 });
