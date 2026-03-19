@@ -1,0 +1,18 @@
+{
+  "name": "Generator QR",
+  "short_name": "Generator QR",
+  "description": "Lokalny generator kodów QR – WiFi, URL, kontakt i więcej",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#5b6ee1",
+  "lang": "pl",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

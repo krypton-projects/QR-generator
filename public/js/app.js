@@ -1,15 +1,16 @@
 'use strict';
 
+// window.QRCode is provided by js/qrcode.min.js (bundled from qrcode@1.5.4)
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentType     = 'wifi';
 let currentQR       = null;   // { qr, format, rawData }
 let logoFile        = null;
 let generateTimer   = null;
 let currentDotStyle = 'square';
-let abortCtrl       = null;   // cancel in-flight requests
-let spinnerTimeout  = null;   // prevent infinite spinner
+let spinnerTimeout  = null;
+let genSeq          = 0;      // monotonic counter to discard stale results
 
-// Q2: single source of truth for type labels
 const TYPE_LABELS = {
   wifi: 'WiFi', url: 'URL', text: 'Tekst',
   email: 'Email', phone: 'Telefon', sms: 'SMS', vcard: 'Kontakt',
@@ -35,11 +36,15 @@ const marginVal     = document.getElementById('marginVal');
 const darkHex       = document.getElementById('darkHex');
 const lightHex      = document.getElementById('lightHex');
 const togglePwdBtn  = document.getElementById('togglePwd');
-const formHint      = document.getElementById('formHint');  // U2: validation hint
+const formHint      = document.getElementById('formHint');
+
+// ── Service Worker ────────────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {/* non-critical */});
+}
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
 (function initTheme() {
-  // UX-06 (localStorage): guard against SecurityError in private-browsing mode
   try {
     const saved = localStorage.getItem('qr-theme') || 'light';
     document.documentElement.setAttribute('data-theme', saved);
@@ -51,8 +56,7 @@ const formHint      = document.getElementById('formHint');  // U2: validation hi
 document.getElementById('themeToggle').addEventListener('click', () => {
   const next = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  // UX-20: guard setItem against SecurityError in private-browsing mode
-  try { localStorage.setItem('qr-theme', next); } catch { /* non-persistent, still works in session */ }
+  try { localStorage.setItem('qr-theme', next); } catch { /* ok */ }
 });
 
 // ── Type buttons ──────────────────────────────────────────────────────────────
@@ -110,14 +114,14 @@ document.querySelectorAll('.dot-btn').forEach(btn => {
   });
 });
 
-// ── Char counters (UX-06) ─────────────────────────────────────────────────
+// ── Char counters ─────────────────────────────────────────────────────────────
 [
   { textarea: 'text-content',  count: 'textCount',       wrapper: 'textCounter',       max: 900 },
   { textarea: 'email-body',    count: 'emailBodyCount',   wrapper: 'emailBodyCounter',  max: 500 },
   { textarea: 'sms-message',   count: 'smsMessageCount',  wrapper: 'smsMessageCounter', max: 160 },
 ].forEach(({ textarea, count, wrapper, max }) => {
-  const ta  = document.getElementById(textarea);
-  const cnt = document.getElementById(count);
+  const ta   = document.getElementById(textarea);
+  const cnt  = document.getElementById(count);
   const wrap = document.getElementById(wrapper);
   if (!ta || !cnt || !wrap) return;
   ta.addEventListener('input', () => {
@@ -189,6 +193,239 @@ document.getElementById('clearHistory').addEventListener('click', () => {
 
 renderHistory();
 
+// ── QR data formatters (mirrors server-side logic) ────────────────────────────
+function escapeWifi(s) {
+  return String(s).replace(/[\\;,"]/g, c => '\\' + c);
+}
+function escapeVCard(s) {
+  return String(s).replace(/[\\;,]/g, c => '\\' + c).replace(/\n/g, '\\n');
+}
+function escapeMATMSG(s) {
+  return String(s).replace(/\\/g, '\\\\').replace(/;/g, '\\;');
+}
+
+function buildQRData(type, data) {
+  switch (type) {
+    case 'url':
+      return String(data.url || '').trim();
+
+    case 'wifi': {
+      const { ssid = '', password = '', security = 'WPA', hidden = false } = data;
+      return `WIFI:T:${security};S:${escapeWifi(ssid)};P:${escapeWifi(password)};H:${hidden ? 'true' : 'false'};;`;
+    }
+
+    case 'text':
+      return String(data.text || '').trim();
+
+    case 'email': {
+      const { to = '', subject = '', body = '' } = data;
+      return `MATMSG:TO:${escapeMATMSG(to)};SUB:${escapeMATMSG(subject)};BODY:${escapeMATMSG(body)};;`;
+    }
+
+    case 'phone':
+      return `tel:${String(data.phone || '').trim()}`;
+
+    case 'sms': {
+      const { phone = '', message = '' } = data;
+      const msg = message ? `?body=${encodeURIComponent(message)}` : '';
+      return `smsto:${phone}${msg}`;
+    }
+
+    case 'vcard': {
+      const {
+        firstName = '', lastName = '',
+        phone = '', email = '',
+        org = '', url = '',
+      } = data;
+      return [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `N:${escapeVCard(lastName)};${escapeVCard(firstName)};;;`,
+        `FN:${escapeVCard(`${firstName} ${lastName}`.trim())}`,
+        phone ? `TEL:${escapeVCard(phone)}`   : null,
+        email ? `EMAIL:${escapeVCard(email)}` : null,
+        org   ? `ORG:${escapeVCard(org)}`     : null,
+        url   ? `URL:${escapeVCard(url)}`     : null,
+        'END:VCARD',
+      ].filter(Boolean).join('\n');
+    }
+
+    default:
+      return '';
+  }
+}
+
+// ── Options normalisation ─────────────────────────────────────────────────────
+const VALID_DOT_STYLES = ['square', 'rounded', 'circle'];
+
+function normaliseOptions(opts = {}, defaultECL = 'M') {
+  return {
+    errorCorrectionLevel: ['L','M','Q','H'].includes(opts.errorCorrectionLevel)
+      ? opts.errorCorrectionLevel : defaultECL,
+    margin:   Math.min(Math.max(parseInt(opts.margin) || 2, 0), 10),
+    width:    Math.min(Math.max(parseInt(opts.width)  || 300, 100), 1000),
+    dotStyle: VALID_DOT_STYLES.includes(opts.dotStyle) ? opts.dotStyle : 'square',
+    color: {
+      dark:  /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(opts.color?.dark)
+               ? opts.color.dark : '#000000',
+      light: /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(opts.color?.light)
+               ? opts.color.light : '#ffffff',
+    },
+  };
+}
+
+// ── Finder pattern helpers (for custom SVG) ───────────────────────────────────
+function isFinderRegion(r, c, size) {
+  return (r < 7 && c < 7) ||
+         (r < 7 && c >= size - 7) ||
+         (r >= size - 7 && c < 7);
+}
+
+function finderRect(cx, cy, n, cell, fill, rx) {
+  const half = (n / 2) * cell;
+  const x = (cx - half).toFixed(2);
+  const y = (cy - half).toFixed(2);
+  const s = (n * cell).toFixed(2);
+  return `<rect x="${x}" y="${y}" width="${s}" height="${s}" rx="${rx.toFixed(2)}" fill="${fill}"/>`;
+}
+
+function drawFinder(cx, cy, cell, dark, light, dotStyle) {
+  if (dotStyle === 'circle') {
+    return [
+      `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(3.5 * cell).toFixed(2)}" fill="${dark}"/>`,
+      `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(2.5 * cell).toFixed(2)}" fill="${light}"/>`,
+      `<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${(1.5 * cell).toFixed(2)}" fill="${dark}"/>`,
+    ].join('');
+  }
+  const outerRx = dotStyle === 'rounded' ? cell       : 0;
+  const innerRx = dotStyle === 'rounded' ? cell * 0.5 : 0;
+  return finderRect(cx, cy, 7, cell, dark,  outerRx)
+       + finderRect(cx, cy, 5, cell, light, outerRx * 0.6)
+       + finderRect(cx, cy, 3, cell, dark,  innerRx);
+}
+
+function buildCustomSVG(text, qrOpts) {
+  const { dotStyle, width, margin, errorCorrectionLevel, color } = qrOpts;
+  const dark  = color.dark;
+  const light = color.light;
+
+  // window.QRCode is the bundled qrcode@1.5.4 library
+  const qr      = QRCode.create(text, { errorCorrectionLevel });
+  const size    = qr.modules.size;
+  const modules = qr.modules.data;
+  const total   = size + margin * 2;
+  const cell    = width / total;
+
+  const parts = [];
+
+  const finderCenters = [
+    [margin + 3.5, margin + 3.5],
+    [margin + 3.5, margin + size - 3.5],
+    [margin + size - 3.5, margin + 3.5],
+  ];
+  for (const [row, col] of finderCenters) {
+    parts.push(drawFinder(col * cell, row * cell, cell, dark, light, dotStyle));
+  }
+
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      if (!modules[r * size + c]) continue;
+      if (isFinderRegion(r, c, size)) continue;
+      const cx = (c + margin + 0.5) * cell;
+      const cy = (r + margin + 0.5) * cell;
+
+      if (dotStyle === 'circle') {
+        const radius = (cell * 0.42).toFixed(2);
+        parts.push(`<circle cx="${cx.toFixed(2)}" cy="${cy.toFixed(2)}" r="${radius}" fill="${dark}"/>`);
+      } else if (dotStyle === 'rounded') {
+        const s  = cell * 0.88;
+        const rx = (s * 0.35).toFixed(2);
+        const x  = (cx - s / 2).toFixed(2);
+        const y  = (cy - s / 2).toFixed(2);
+        parts.push(`<rect x="${x}" y="${y}" width="${s.toFixed(2)}" height="${s.toFixed(2)}" rx="${rx}" fill="${dark}"/>`);
+      } else {
+        const x = (cx - cell / 2).toFixed(2);
+        const y = (cy - cell / 2).toFixed(2);
+        parts.push(`<rect x="${x}" y="${y}" width="${cell.toFixed(2)}" height="${cell.toFixed(2)}" fill="${dark}"/>`);
+      }
+    }
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${width}" viewBox="0 0 ${width} ${width}"><rect width="${width}" height="${width}" fill="${light}"/>${parts.join('')}</svg>`;
+}
+
+// ── SVG → PNG via Canvas ──────────────────────────────────────────────────────
+function svgToPng(svgString, size) {
+  return new Promise((resolve, reject) => {
+    const blob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const img  = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = size;
+      canvas.height = size;
+      canvas.getContext('2d').drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('SVG render failed')); };
+    img.src = url;
+  });
+}
+
+// ── Logo compositing via Canvas ───────────────────────────────────────────────
+function compositeLogoOnQR(qrDataUrl, file, qrWidth) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    canvas.width  = qrWidth;
+    canvas.height = qrWidth;
+    const ctx = canvas.getContext('2d');
+
+    const qrImg = new Image();
+    qrImg.onload = () => {
+      ctx.drawImage(qrImg, 0, 0, qrWidth, qrWidth);
+
+      const logoImg = new Image();
+      const logoUrl = URL.createObjectURL(file);
+      logoImg.onload = () => {
+        const logoSize = Math.floor(qrWidth * 0.20);
+        const offset   = (qrWidth - logoSize) / 2;
+        ctx.drawImage(logoImg, offset, offset, logoSize, logoSize);
+        URL.revokeObjectURL(logoUrl);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      logoImg.onerror = () => { URL.revokeObjectURL(logoUrl); reject(new Error('Logo load failed')); };
+      logoImg.src = logoUrl;
+    };
+    qrImg.onerror = reject;
+    qrImg.src = qrDataUrl;
+  });
+}
+
+// ── Local QR generation (no server required) ──────────────────────────────────
+async function generateQRLocally(type, data, options) {
+  const qrData  = buildQRData(type, data);
+  const qrOpts  = normaliseOptions(options, logoFile ? 'H' : 'M');
+  const format  = options.format === 'svg' ? 'svg' : 'png';
+  const useCustom = qrOpts.dotStyle !== 'square';
+
+  if (useCustom || format === 'svg') {
+    const svg = buildCustomSVG(qrData, qrOpts);
+    if (format === 'svg') return { qr: svg, format: 'svg' };
+    const pngDataUrl = await svgToPng(svg, qrOpts.width);
+    return { qr: pngDataUrl, format: 'png' };
+  }
+
+  const dataUrl = await QRCode.toDataURL(qrData, {
+    errorCorrectionLevel: qrOpts.errorCorrectionLevel,
+    margin: qrOpts.margin,
+    width:  qrOpts.width,
+    color:  qrOpts.color,
+    type:   'image/png',
+  });
+  return { qr: dataUrl, format: 'png' };
+}
+
 // ── Core: collect form data ───────────────────────────────────────────────────
 function collectData() {
   switch (currentType) {
@@ -230,7 +467,7 @@ function collectData() {
   }
 }
 
-// U2: returns null when data is sufficient, or a hint string why it isn't
+// ── Validation ────────────────────────────────────────────────────────────────
 function getValidationError(data) {
   switch (currentType) {
     case 'wifi':
@@ -241,7 +478,6 @@ function getValidationError(data) {
     case 'url': {
       const url = data.url?.trim() || '';
       if (!url) return 'Podaj adres URL.';
-      // F2: validate URL structure with the browser URL API
       try {
         const parsed = new URL(url);
         if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -257,7 +493,6 @@ function getValidationError(data) {
       return data.text?.trim() ? null : 'Wpisz treść tekstu.';
 
     case 'email': {
-      // U4: validate email format, not just non-empty
       const email = data.to?.trim() || '';
       if (!email) return 'Podaj adres email odbiorcy.';
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return 'Nieprawidłowy format adresu email.';
@@ -265,7 +500,6 @@ function getValidationError(data) {
     }
 
     case 'phone': {
-      // U6: basic phone format validation
       const phone = data.phone?.trim() || '';
       if (!phone) return 'Podaj numer telefonu.';
       if (!/^\+?[\d\s\-().]{6,20}$/.test(phone)) return 'Nieprawidłowy format numeru (np. +48123456789).';
@@ -273,7 +507,6 @@ function getValidationError(data) {
     }
 
     case 'sms': {
-      // U6: basic phone format validation for SMS
       const phone = data.phone?.trim() || '';
       if (!phone) return 'Podaj numer telefonu.';
       if (!/^\+?[\d\s\-().]{6,20}$/.test(phone)) return 'Nieprawidłowy format numeru (np. +48123456789).';
@@ -299,12 +532,11 @@ function scheduleGenerate() {
   generateTimer = setTimeout(generateQR, 300);
 }
 
-// ── Generate QR ───────────────────────────────────────────────────────────────
+// ── Generate QR (fully local — no server) ─────────────────────────────────────
 async function generateQR() {
   const data  = collectData();
   const error = getValidationError(data);
 
-  // U2: show/hide inline validation hint
   if (formHint) {
     if (error) {
       formHint.textContent = error;
@@ -332,48 +564,30 @@ async function generateQR() {
     },
   };
 
-  // Cancel any previous in-flight request
-  if (abortCtrl) abortCtrl.abort();
-  abortCtrl = new AbortController();
-  const { signal } = abortCtrl;
-
+  const seq = ++genSeq;
   showSpinner();
 
   try {
-    let result;
+    const result = await generateQRLocally(currentType, data, options);
+    if (seq !== genSeq) return; // superseded by newer call
 
-    if (logoFile) {
-      result = await generateWithLogo(data, options, signal);
+    if (logoFile && result.format === 'png') {
+      const composited = await compositeLogoOnQR(result.qr, logoFile, options.width || 300);
+      if (seq !== genSeq) return;
+      const final = { ...result, qr: composited };
+      displayQR(final, data);
+      saveToHistory(final, data);
     } else {
-      const resp = await fetch('/api/generate', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ type: currentType, data, options }),
-        signal,
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      result = await resp.json();
+      displayQR(result, data);
+      saveToHistory(result, data);
     }
 
-    displayQR(result, data);
-    saveToHistory(result, data);
-
   } catch (err) {
-    if (err.name === 'AbortError') return; // silently ignore cancelled requests
+    if (seq !== genSeq) return;
     console.error('Błąd generowania QR:', err);
     showPlaceholder();
     showToast('Błąd generowania – sprawdź dane');
   }
-}
-
-async function generateWithLogo(data, options, signal) {
-  const form = new FormData();
-  form.append('payload', JSON.stringify({ type: currentType, data, options }));
-  form.append('logo', logoFile);
-
-  const resp = await fetch('/api/generate-with-logo', { method: 'POST', body: form, signal });
-  if (!resp.ok) throw new Error(await resp.text());
-  return resp.json();
 }
 
 // ── Display result ────────────────────────────────────────────────────────────
@@ -388,11 +602,9 @@ function displayQR(result, data) {
     qrImage.classList.add('hidden');
     qrSvgWrap.classList.remove('hidden');
 
-    // S1: use DOMParser instead of innerHTML to avoid potential XSS
     const parser = new DOMParser();
     const doc    = parser.parseFromString(result.qr, 'image/svg+xml');
     const svgEl  = doc.documentElement;
-    // DOMParser signals parse errors via a <parsererror> element
     if (svgEl.nodeName === 'parsererror' || svgEl.querySelector('parsererror')) {
       showPlaceholder();
       return;
@@ -423,12 +635,10 @@ function showPlaceholder() {
 function showSpinner() {
   qrPlaceholder.classList.add('hidden');
   qrSpinner.classList.remove('hidden');
-  // auto-hide spinner after 10 s to prevent infinite state
   clearTimeout(spinnerTimeout);
   spinnerTimeout = setTimeout(() => {
     qrSpinner.classList.add('hidden');
     qrPlaceholder.classList.remove('hidden');
-    // UX-08: actionable message so user knows what to do
     showToast('Przekroczono czas oczekiwania. Spróbuj ponownie lub zmień parametry.');
   }, 10_000);
 }
@@ -437,7 +647,6 @@ function showSpinner() {
 async function downloadQR(requestedFormat) {
   if (!currentQR) return;
 
-  // UX-10: sanitize filename – strip characters unsafe on Windows/Linux filesystems
   const label = `qr-${(TYPE_SAFE_NAMES[currentType] || 'qr').replace(/[^a-z0-9-]/gi, '')}-${Date.now()}`;
 
   if (requestedFormat === 'svg' && currentQR.format === 'svg') {
@@ -449,7 +658,7 @@ async function downloadQR(requestedFormat) {
     return;
   }
 
-  // Re-request in the required format
+  // Re-generate in the required format
   const data    = collectData();
   const options = {
     format:               requestedFormat,
@@ -464,15 +673,7 @@ async function downloadQR(requestedFormat) {
   };
 
   try {
-    const resp = await fetch('/api/generate', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ type: currentType, data, options }),
-    });
-    // F3: check HTTP status before parsing response body
-    if (!resp.ok) throw new Error(await resp.text());
-    const result = await resp.json();
-
+    const result = await generateQRLocally(currentType, data, options);
     currentQR = { ...currentQR, ...result };
 
     if (requestedFormat === 'svg') {
@@ -513,7 +714,6 @@ function saveToHistory(result, data) {
     case 'vcard':  preview = `${data.firstName || ''} ${data.lastName || ''}`.trim() || '–'; break;
   }
 
-  // F4: use a unique id (ts + random) so stale index from another tab can't cause mismatches
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
   history.unshift({ id, type: currentType, label: TYPE_LABELS[currentType], preview, thumb: result.qr, ts: Date.now() });
   localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
@@ -528,7 +728,6 @@ function loadHistory() {
 function renderHistory() {
   const history = loadHistory();
 
-  // UX-09: show item count so user knows older entries are evicted after 10
   const countEl = document.getElementById('historyCount');
   if (countEl) countEl.textContent = history.length ? `(${history.length}/10)` : '';
 
@@ -541,7 +740,6 @@ function renderHistory() {
   history.forEach(item => {
     const li   = document.createElement('li');
     li.className = 'history-item';
-    // F4: store unique id instead of mutable index for safe lookup
     li.dataset.historyId = item.id || String(item.ts);
     li.setAttribute('role', 'button');
     li.setAttribute('tabindex', '0');
@@ -568,7 +766,6 @@ function renderHistory() {
     historyList.append(li);
 
     li.addEventListener('click', () => {
-      // F4: look up by unique id, immune to concurrent tab modifications
       const current = loadHistory();
       const entry   = current.find(e => (e.id || String(e.ts)) === li.dataset.historyId);
       if (!entry) return;
@@ -584,11 +781,9 @@ function showToast(msg) {
   toast.textContent = msg;
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  // U5: extended duration (3.5 s) and click-to-dismiss
   toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
 }
 
-// U5: clicking the toast dismisses it immediately
 toast.addEventListener('click', () => {
   clearTimeout(toastTimer);
   toast.classList.remove('show');
