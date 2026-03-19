@@ -69,11 +69,15 @@ function rateLimit(req, res, next) {
 
 // SEC-04: wrap sharp toBuffer() with a timeout to prevent hanging on large/malicious files
 function withSharpTimeout(sharpInstance) {
+  let timeoutId;
   return Promise.race([
-    sharpInstance.toBuffer(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Sharp processing timeout')), SHARP_TIMEOUT_MS)
-    ),
+    sharpInstance.toBuffer().finally(() => clearTimeout(timeoutId)),
+    new Promise((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error('Sharp processing timeout')),
+        SHARP_TIMEOUT_MS
+      );
+    }),
   ]);
 }
 

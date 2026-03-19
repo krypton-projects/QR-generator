@@ -645,5 +645,4 @@ input[type="range"] {
 /* UX-13: respect prefers-reduced-motion system setting */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
-  .spinner { animation: spin 1.5s linear infinite !important; }
 }
