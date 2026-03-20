@@ -9,162 +9,162 @@
  ╚══▀▀═╝ ╚═╝  ╚═╝     ╚═════╝ ╚══════╝╚═╝  ╚═══╝
 ```
 
-**Bezpieczny, w pełni lokalny generator kodów QR działający w przeglądarce.**
-Żadne dane nie opuszczają Twojego komputera.
+**A secure, fully local QR code generator that runs in your browser.**
+No data ever leaves your machine.
 
 ---
 
 [![Node.js](https://img.shields.io/badge/Node.js-%E2%89%A520.3-339933?style=flat-square&logo=node.js&logoColor=white)](https://nodejs.org)
 [![Express](https://img.shields.io/badge/Express-5.x-000000?style=flat-square&logo=express&logoColor=white)](https://expressjs.com)
-[![License](https://img.shields.io/badge/Licencja-MIT-blue?style=flat-square)](LICENSE)
-[![Security](https://img.shields.io/badge/Bezpiecze%C5%84stwo-Helmet%20%2B%20CSP-green?style=flat-square&logo=shield&logoColor=white)](https://helmetjs.github.io)
-[![WCAG](https://img.shields.io/badge/Dost%C4%99pno%C5%9B%C4%87-WCAG%202.1%20AA-purple?style=flat-square)](https://www.w3.org/WAI/WCAG21/quickref/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![Security](https://img.shields.io/badge/Security-Helmet%20%2B%20CSP-green?style=flat-square&logo=shield&logoColor=white)](https://helmetjs.github.io)
+[![WCAG](https://img.shields.io/badge/Accessibility-WCAG%202.1%20AA-purple?style=flat-square)](https://www.w3.org/WAI/WCAG21/quickref/)
 
 </div>
 
 ---
 
-## Zawartość
+## Table of Contents
 
-- [Funkcje](#-funkcje)
-- [Szybki start](#-szybki-start)
-- [Struktura projektu](#-struktura-projektu)
-- [API](#-api)
-- [Bezpieczeństwo](#-bezpieczeństwo)
-- [Dostępność](#-dostępność-a11y)
-- [Zależności](#-zależności)
+- [Features](#-features)
+- [Quick Start](#-quick-start)
+- [Project Structure](#-project-structure)
+- [API Reference](#-api-reference)
+- [Security](#-security)
+- [Accessibility](#-accessibility-a11y)
+- [Dependencies](#-dependencies)
 
 ---
 
-## ✨ Funkcje
+## Features
 
-### Obsługiwane typy kodów QR
+### Supported QR Code Types
 
-| Typ | Ikona | Opis |
-|-----|-------|------|
-| **WiFi** | 📶 | Automatyczne połączenie z siecią (SSID, hasło, WPA / WEP / otwarta) |
-| **URL** | 🔗 | Adres strony internetowej (http / https z walidacją) |
-| **Tekst** | 📝 | Dowolna treść (do 900 znaków) |
-| **Email** | ✉️ | Gotowa wiadomość z odbiorcą, tematem i treścią |
-| **Telefon** | 📞 | Numer do zadzwonienia |
-| **SMS** | 💬 | Numer + predefiniowana treść wiadomości (do 160 znaków) |
-| **Kontakt (vCard)** | 👤 | Wizytówka: imię, nazwisko, telefon, email, organizacja, www |
+| Type | Icon | Description |
+|------|------|-------------|
+| **WiFi** | 📶 | Auto-connect to a network (SSID, password, WPA / WEP / open) |
+| **URL** | 🔗 | Website address (http / https with validation) |
+| **Text** | 📝 | Any plain text content (up to 900 characters) |
+| **Email** | ✉️ | Ready-to-send message with recipient, subject, and body |
+| **Phone** | 📞 | Phone number to dial |
+| **SMS** | 💬 | Phone number + predefined message body (up to 160 characters) |
+| **Contact (vCard)** | 👤 | Business card: first/last name, phone, email, organization, URL |
 
-### Opcje wyglądu
+### Appearance Options
 
 <table>
 <tr>
 <td>
 
-**Format i rozmiar**
-- 🖼️ SVG (skalowalny) lub PNG (rastrowy)
-- 📐 Rozmiar: 100–1000 px
-- ↔️ Margines: 0–10 modułów
+**Format & Size**
+- 🖼️ SVG (scalable) or PNG (raster)
+- 📐 Size: 100–1000 px
+- ↔️ Margin: 0–10 modules
 
 </td>
 <td>
 
-**Styl modułów**
-- ⬛ Kwadrat (domyślny)
-- 🔲 Zaokrąglony
-- 🔵 Kółko
+**Dot Style**
+- ⬛ Square (default)
+- 🔲 Rounded
+- 🔵 Circle
 
 </td>
 <td>
 
-**Zaawansowane**
-- 🎨 Dowolne kolory modułów i tła
-- 🛡️ Korekcja błędów: L / M / Q / H
-- 🖼️ Logo nakładane na środek (max 2 MB)
+**Advanced**
+- 🎨 Custom module and background colors
+- 🛡️ Error correction: L / M / Q / H
+- 🖼️ Logo overlay centered on QR (max 2 MB)
 
 </td>
 </tr>
 </table>
 
-### Inne
+### Other Features
 
-| Funkcja | Opis |
-|---------|------|
-| ⚡ Podgląd na żywo | Kod regeneruje się automatycznie (debounce 300 ms) |
-| 💾 Eksport | Pobieranie PNG lub SVG bezpośrednio z przeglądarki |
-| 📋 Kopiuj dane | Zakodowana treść trafia do schowka jednym kliknięciem |
-| 🕒 Historia | Ostatnie 10 kodów zapisanych w `localStorage` |
-| 🌙 Motywy | Jasny / ciemny z persystencją między sesjami |
+| Feature | Description |
+|---------|-------------|
+| ⚡ Live Preview | QR regenerates automatically (300 ms debounce) |
+| 💾 Export | Download PNG or SVG directly from the browser |
+| 📋 Copy Data | Encoded content copied to clipboard in one click |
+| 🕒 History | Last 10 generated codes saved in `localStorage` |
+| 🌙 Themes | Light / dark mode with persistence between sessions |
 
 ---
 
-## 🚀 Szybki start
+## 🚀 Quick Start
 
-### Wymagania
+### Requirements
 
 - **Node.js** ≥ 20.3.0
 - **npm** ≥ 9
 
-### Instalacja
+### Installation
 
 ```bash
 # One-liner
 git clone https://github.com/krypton-projects/QR-generator && cd QR-generator && npm install && npm start
 ```
 
-lub krok po kroku:
+Or step by step:
 
 ```bash
-# 1. Sklonuj repozytorium
+# 1. Clone the repository
 git clone https://github.com/krypton-projects/QR-generator
 cd QR-generator
 
-# 2. Zainstaluj zależności
+# 2. Install dependencies
 npm install
 
-# 3. Uruchom
+# 3. Start the server
 npm start
 ```
 
-> Aplikacja automatycznie otwiera się w przeglądarce pod adresem **`http://localhost:3000`**.
+> The app automatically opens in your browser at **`http://localhost:3000`**.
 
 > [!NOTE]
-> Serwer nasłuchuje wyłącznie na `127.0.0.1` — nie jest dostępny z sieci zewnętrznej.
+> The server listens exclusively on `127.0.0.1` — it is not accessible from external networks.
 
 ---
 
-## 📁 Struktura projektu
+## 📁 Project Structure
 
 ```
 QR-generator/
-├── 📄 server.js            # Serwer Express – API + serwowanie plików statycznych
+├── 📄 server.js            # Express server — API + static file serving
 ├── 📦 package.json
 ├── 📂 public/
-│   ├── 📄 index.html       # Jednostronicowa aplikacja (SPA)
+│   ├── 📄 index.html       # Single-page application (SPA)
 │   ├── 📂 css/
-│   │   └── 🎨 style.css   # Design system – custom properties, dark mode
+│   │   └── 🎨 style.css   # Design system — custom properties, dark mode
 │   └── 📂 js/
-│       └── ⚡ app.js       # Logika klienta – formularze, generowanie, historia
+│       └── ⚡ app.js       # Client logic — forms, generation, history
 └── 📖 README.md
 ```
 
-### Przepływ danych
+### Data Flow
 
 ```
 ┌─────────────────────────────────────┐
-│         Przeglądarka (app.js)       │
+│         Browser (app.js)            │
 │  collectData() ──► JSON payload     │
 └──────────────┬──────────────────────┘
                │
        ┌───────▼────────┐
-       │  POST /api/…   │  ← JSON lub multipart/form-data
+       │  POST /api/…   │  ← JSON or multipart/form-data
        └───────┬────────┘
                │
 ┌──────────────▼──────────────────────┐
 │             server.js               │
 │                                     │
-│  rateLimit()       per-IP, FIFO cap │
-│  buildQRData()     WiFi/vCard/…     │
-│  normaliseOptions() walidacja opcji │
-│  buildCustomSVG()  własny renderer  │
+│  rateLimit()        per-IP, FIFO cap│
+│  buildQRData()      WiFi/vCard/…    │
+│  normaliseOptions() option validation│
+│  buildCustomSVG()   custom renderer │
 │  validateMagicBytes() magic bytes   │
 │  sanitizeSvgLogo()  strip XSS       │
-│  sharp / qrcode    generowanie      │
+│  sharp / qrcode     generation      │
 └──────────────┬──────────────────────┘
                │
        ┌───────▼───────────────────────┐
@@ -174,25 +174,25 @@ QR-generator/
 
 ---
 
-## 📡 API
+## 📡 API Reference
 
 ### `POST /api/generate`
 
-Generuje kod QR bez logo.
+Generates a QR code without a logo.
 
 ```http
 POST /api/generate
 Content-Type: application/json
 ```
 
-**Ciało żądania:**
+**Request body:**
 
 ```json
 {
   "type": "wifi",
   "data": {
-    "ssid": "MojaSiec",
-    "password": "tajnehaslo",
+    "ssid": "MyNetwork",
+    "password": "secretpassword",
     "security": "WPA",
     "hidden": false
   },
@@ -210,121 +210,121 @@ Content-Type: application/json
 }
 ```
 
-**Dozwolone wartości `type`:**
+**Allowed `type` values:**
 
 ```
 url  |  wifi  |  text  |  email  |  phone  |  sms  |  vcard
 ```
 
-**Odpowiedź (`200 OK`):**
+**Response (`200 OK`):**
 
 ```json
-{ "qr": "<svg xmlns=…>…</svg>",      "format": "svg" }
-{ "qr": "data:image/png;base64,…",   "format": "png" }
+{ "qr": "<svg xmlns=…>…</svg>",     "format": "svg" }
+{ "qr": "data:image/png;base64,…",  "format": "png" }
 ```
 
 ---
 
 ### `POST /api/generate-with-logo`
 
-Generuje kod QR z nałożonym logo. Zawsze zwraca PNG.
+Generates a QR code with an overlaid logo. Always returns PNG.
 
 ```http
 POST /api/generate-with-logo
 Content-Type: multipart/form-data
 ```
 
-| Pole | Typ | Opis |
-|------|-----|------|
-| `payload` | `string` (JSON) | Identyczny obiekt jak ciało `/api/generate` |
+| Field | Type | Description |
+|-------|------|-------------|
+| `payload` | `string` (JSON) | Same object as the `/api/generate` body |
 | `logo` | `File` | PNG / JPG / WebP / SVG, max 2 MB |
 
-**Odpowiedź (`200 OK`):**
+**Response (`200 OK`):**
 
 ```json
 { "qr": "data:image/png;base64,…", "format": "png" }
 ```
 
-**Kody błędów:**
+**Error codes:**
 
-| Kod | Znaczenie |
-|-----|-----------|
-| `400` | Nieprawidłowy typ QR, brak danych, zły format pliku |
-| `429` | Przekroczony limit żądań (100 req / min / IP) |
-| `500` | Błąd generowania (np. timeout Sharp) |
+| Code | Meaning |
+|------|---------|
+| `400` | Invalid QR type, missing data, or bad file format |
+| `429` | Rate limit exceeded (100 req / min / IP) |
+| `500` | Generation error (e.g. Sharp timeout) |
 
 ---
 
-## 🔒 Bezpieczeństwo
+## 🔒 Security
 
-Aplikacja stosuje wielowarstwową ochronę — każda warstwa działa niezależnie:
+The application uses multi-layered protection — each layer operates independently:
 
 ```
-Żądanie HTTP
+HTTP Request
      │
      ▼
 ┌─────────────────────────────────────────────────────┐
-│ 🛡️  Warstwa 1 – Nagłówki HTTP (Helmet)               │
+│ 🛡️  Layer 1 – HTTP Headers (Helmet)                  │
 │     CSP · frame-ancestors · base-uri · form-action  │
 ├─────────────────────────────────────────────────────┤
-│ 🚦  Warstwa 2 – Rate Limiting                        │
-│     100 req/min/IP · mapa max 10 000 wpisów (FIFO)  │
+│ 🚦  Layer 2 – Rate Limiting                          │
+│     100 req/min/IP · map capped at 10,000 (FIFO)    │
 ├─────────────────────────────────────────────────────┤
-│ 📁  Warstwa 3 – Walidacja uploadu                    │
-│     Magic bytes · MIME whitelist · limit 2 MB       │
+│ 📁  Layer 3 – Upload Validation                      │
+│     Magic bytes · MIME whitelist · 2 MB limit       │
 ├─────────────────────────────────────────────────────┤
-│ 🧹  Warstwa 4 – Sanitizacja SVG                      │
-│     Usuwanie <script> <style> on* javascript:href   │
+│ 🧹  Layer 4 – SVG Sanitization                       │
+│     Strips <script> <style> on* javascript:href     │
 ├─────────────────────────────────────────────────────┤
-│ ✏️  Warstwa 5 – Escaping danych QR                   │
+│ ✏️  Layer 5 – QR Data Escaping                       │
 │     WiFi · vCard RFC 6350 · MATMSG                  │
 ├─────────────────────────────────────────────────────┤
-│ ⏱️  Warstwa 6 – Timeout przetwarzania                │
-│     Sharp max 5 s · clearTimeout po sukcesie        │
+│ ⏱️  Layer 6 – Processing Timeout                     │
+│     Sharp max 5 s · clearTimeout on success         │
 ├─────────────────────────────────────────────────────┤
-│ 🖥️  Warstwa 7 – Bezpieczne renderowanie SVG          │
-│     DOMParser zamiast innerHTML · importNode        │
+│ 🖥️  Layer 7 – Safe SVG Rendering                     │
+│     DOMParser instead of innerHTML · importNode     │
 └─────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ♿ Dostępność (a11y)
+## ♿ Accessibility (a11y)
 
-Aplikacja spełnia standard **WCAG 2.1 AA**:
+The application meets the **WCAG 2.1 AA** standard:
 
-| Kryterium | Implementacja |
-|-----------|--------------|
-| **Kontrast** | ≥ 4,5:1 dla tekstu normalnego w obu motywach |
-| **Nawigacja klawiaturą** | `:focus-visible` na wszystkich elementach interaktywnych |
-| **Screen readery** | `aria-label` na przyciskach ikonowych, `aria-describedby` na color pickerach |
-| **Live regions** | `role="alert"` + `aria-live="polite"` na walidacji i toastach |
-| **Liczniki znaków** | Widoczne przy textarea (zmiana koloru przy 90% i 100% limitu) |
-| **Animacje** | Wyłączane przy `prefers-reduced-motion: reduce` |
-
----
-
-## 📦 Zależności
-
-| Pakiet | Wersja | Rola |
-|--------|:------:|------|
-| [`express`](https://expressjs.com) | ^5.2 | Serwer HTTP |
-| [`helmet`](https://helmetjs.github.io) | ^8.1 | Nagłówki bezpieczeństwa (CSP, HSTS, …) |
-| [`multer`](https://github.com/expressjs/multer) | ^2.1 | Obsługa przesyłania plików (multipart) |
-| [`qrcode`](https://github.com/soldair/node-qrcode) | ^1.5 | Generowanie matrycy i SVG / PNG kodów QR |
-| [`sharp`](https://sharp.pixelplumbing.com) | ^0.34 | Resize i kompozytowanie obrazów (logo) |
-| [`open`](https://github.com/sindresorhus/open) | ^10.1 | Automatyczne otwarcie przeglądarki po starcie |
+| Criterion | Implementation |
+|-----------|---------------|
+| **Contrast** | ≥ 4.5:1 for normal text in both themes |
+| **Keyboard Navigation** | `:focus-visible` on all interactive elements |
+| **Screen Readers** | `aria-label` on icon buttons, `aria-describedby` on color pickers |
+| **Live Regions** | `role="alert"` + `aria-live="polite"` on validation and toasts |
+| **Character Counters** | Visible on textareas (color changes at 90% and 100% of limit) |
+| **Animations** | Disabled when `prefers-reduced-motion: reduce` is set |
 
 ---
 
-## 📄 Licencja
+## 📦 Dependencies
 
-Projekt dostępny na licencji **MIT**.
+| Package | Version | Role |
+|---------|:-------:|------|
+| [`express`](https://expressjs.com) | ^5.2 | HTTP server |
+| [`helmet`](https://helmetjs.github.io) | ^8.1 | Security headers (CSP, HSTS, …) |
+| [`multer`](https://github.com/expressjs/multer) | ^2.1 | File upload handling (multipart) |
+| [`qrcode`](https://github.com/soldair/node-qrcode) | ^1.5 | QR matrix and SVG / PNG generation |
+| [`sharp`](https://sharp.pixelplumbing.com) | ^0.34 | Image resize and compositing (logo) |
+| [`open`](https://github.com/sindresorhus/open) | ^10.1 | Auto-open browser on start |
+
+---
+
+## 📄 License
+
+This project is available under the **MIT License**.
 
 ---
 
 <div align="center">
 
-*Dane przetwarzane wyłącznie lokalnie — nic nie opuszcza Twojej maszyny.*
+*All data is processed locally — nothing leaves your machine.*
 
 </div>
