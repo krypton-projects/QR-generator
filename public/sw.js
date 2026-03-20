@@ -43,6 +43,7 @@ self.addEventListener('fetch', e => {
         if (e.request.mode === 'navigate') {
           return caches.match('./index.html');
         }
+        return new Response('', { status: 503, statusText: 'Offline' });
       });
     })
   );

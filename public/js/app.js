@@ -615,6 +615,22 @@ function hasEnoughData(data) {
   return getValidationError(data) === null;
 }
 
+// Returns the DOM id of the first invalid field (for .has-error highlight)
+function getErrorFieldId(data) {
+  switch (currentType) {
+    case 'wifi':
+      if (!data.ssid?.trim()) return 'wifi-ssid';
+      if (data.security !== 'nopass' && !data.password?.length) return 'wifi-password';
+      return null;
+    case 'url':    return (!data.url?.trim() || (() => { try { new URL(data.url); return false; } catch { return true; } })()) ? 'url-link' : null;
+    case 'text':   return data.text?.trim() ? null : 'text-content';
+    case 'email':  return (!data.to?.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.to)) ? 'email-to' : null;
+    case 'phone':  return (!data.phone?.trim() || !PHONE_RE.test(data.phone)) ? 'phone-number' : null;
+    case 'sms':    return (!data.phone?.trim() || !PHONE_RE.test(data.phone)) ? 'sms-phone' : null;
+    default:       return null;
+  }
+}
+
 // ── Collect current UI options ────────────────────────────────────────────────
 function collectOptions(formatOverride) {
   return {
@@ -641,10 +657,18 @@ async function generateQR() {
   const data  = collectData();
   const error = getValidationError(data);
 
+  // Clear previous field-level error state
+  document.querySelectorAll('#formCard .field-group.has-error').forEach(fg => fg.classList.remove('has-error'));
+
   if (formHint) {
     if (error) {
       formHint.textContent = error;
       formHint.classList.remove('hidden');
+      // Apply .has-error to the specific field that triggered the error
+      const errorFieldId = getErrorFieldId(data);
+      if (errorFieldId) {
+        document.getElementById(errorFieldId)?.closest('.field-group')?.classList.add('has-error');
+      }
     } else {
       formHint.textContent = '';
       formHint.classList.add('hidden');
@@ -656,8 +680,16 @@ async function generateQR() {
     return;
   }
 
-  const options = collectOptions();
+  let options = collectOptions();
   const logo    = logoFile;  // snapshot — prevents race if user removes logo during async ops
+
+  // Logo is not composited onto SVG — warn and switch to PNG automatically
+  if (logo && options.format === 'svg') {
+    showToast('Logo nie jest nakładane na SVG — format zmieniony na PNG.', 'warning');
+    options = { ...options, format: 'png' };
+    const pngRadio = document.querySelector('input[name="format"][value="png"]');
+    if (pngRadio) pngRadio.checked = true;
+  }
 
   const seq = ++genSeq;
   showSpinner();
@@ -667,7 +699,7 @@ async function generateQR() {
     if (seq !== genSeq) return; // superseded by newer call
 
     if (logo && result.format === 'png') {
-      const composited = await compositeLogoOnQR(result.qr, logo, options.width || 300);
+      const composited = await compositeLogoOnQR(result.qr, logo, Math.max(100, Math.min(1000, options.width || 300)));
       if (seq !== genSeq) return; // check AFTER async compositing too
       const final = { ...result, qr: composited };
       displayQR(final, data);
@@ -713,7 +745,7 @@ function displayQR(result, data) {
     qrImage.src = result.qr;
   }
 
-  previewActs.style.display = 'flex';
+  previewActs.classList.remove('hidden');
 }
 
 function showPlaceholder() {
@@ -723,7 +755,7 @@ function showPlaceholder() {
   qrSvgWrap.classList.add('hidden');
   qrSvgWrap.innerHTML = '';
   qrPlaceholder.classList.remove('hidden');
-  previewActs.style.display = 'none';
+  previewActs.classList.add('hidden');
   currentQR = null;
 }
 
@@ -815,7 +847,8 @@ function saveToHistory(result, data) {
     ? result.qr : null;
 
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  history.unshift({ id, type: currentType, label: TYPE_LABELS[currentType], preview, thumb, ts: Date.now() });
+  const rawData = SENSITIVE_TYPES.has(currentType) ? null : JSON.stringify(data);
+  history.unshift({ id, type: currentType, label: TYPE_LABELS[currentType], preview, thumb, rawData, ts: Date.now() });
   try {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
   } catch (e) {
@@ -854,8 +887,15 @@ historyList.addEventListener('click', e => {
   const li = e.target.closest('.history-item');
   if (!li) return;
   const entry = loadHistory().find(h => (h.id || String(h.ts)) === li.dataset.historyId);
-  if (!entry?.thumb) { showToast('Brak miniatury — wygeneruj kod ponownie'); return; }
-  displayQR({ qr: entry.thumb, format: 'png' }, {});
+  if (!entry?.thumb) {
+    const reason = SENSITIVE_TYPES.has(entry?.type)
+      ? 'Kod WiFi nie zapisuje podglądu ze względów bezpieczeństwa.'
+      : 'Brak miniatury — wygeneruj kod ponownie.';
+    showToast(reason, 'info');
+    return;
+  }
+  const restoredData = entry.rawData ? JSON.parse(entry.rawData) : {};
+  displayQR({ qr: entry.thumb, format: 'png' }, restoredData);
 });
 
 historyList.addEventListener('keydown', e => {
@@ -937,8 +977,11 @@ let toastTimer;
 function showToast(msg, type = 'info') {
   toast.textContent = msg;
   toast.className = `toast show toast--${type}`;
+  // Use assertive role for errors/warnings so AT announces immediately
+  toast.setAttribute('role', (type === 'error' || type === 'warning') ? 'alert' : 'status');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3500);
+  const duration = Math.max(3500, msg.length * 60); // longer messages stay longer
+  toastTimer = setTimeout(() => toast.classList.remove('show'), duration);
 }
 
 toast.addEventListener('click', () => {

@@ -12,6 +12,7 @@
 </head>
 <body>
 
+<a href="#main" class="skip-link">Przejdź do treści</a>
 <!-- ── HEADER ──────────────────────────────────────────────────────────── -->
 <header class="header">
   <div class="header-inner">
@@ -46,7 +47,7 @@
 </header>
 
 <!-- ── MAIN ─────────────────────────────────────────────────────────────── -->
-<main class="main">
+<main class="main" id="main">
 
   <!-- LEFT: Form -->
   <section class="panel panel-form">
@@ -114,7 +115,7 @@
           <label for="wifi-password">Hasło</label>
           <div class="input-password">
             <input type="password" id="wifi-password" name="password" placeholder="••••••••" autocomplete="off" />
-            <button type="button" class="btn-icon-sm" id="togglePwd" aria-label="Pokaż/ukryj hasło" aria-pressed="false" title="Pokaż hasło">
+            <button type="button" class="btn-icon-sm" id="togglePwd" aria-label="Pokaż/ukryj hasło" aria-pressed="false" aria-controls="wifi-password" title="Pokaż hasło">
               <svg class="eye-open" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
               </svg>
@@ -229,7 +230,7 @@
       </div>
 
       <!-- U2: inline validation hint shown when form is incomplete -->
-      <p id="formHint" class="form-hint hidden" role="alert" aria-live="polite"></p>
+      <p id="formHint" class="form-hint hidden" role="alert"></p>
 
     </div><!-- /form-card -->
 
@@ -377,7 +378,7 @@
         </label>
       </div>
 
-      <div class="preview-actions" id="previewActions" style="display:none">
+      <div class="preview-actions hidden" id="previewActions">
         <button class="btn btn-primary" id="dlPng">Pobierz PNG</button>
         <button class="btn btn-outline" id="dlSvg">Pobierz SVG</button>
         <button class="btn btn-outline" id="copyBtn">Kopiuj dane</button>
@@ -391,7 +392,7 @@
     <div class="history-card" id="historyCard">
       <div class="history-header">
         <h2 class="section-title">Historia <span id="historyCount" aria-live="polite"></span></h2>
-        <button class="btn-sm" id="clearHistory">Wyczyść</button>
+        <button class="btn-sm" id="clearHistory" aria-label="Wyczyść historię">Wyczyść</button>
       </div>
       <ul class="history-list" id="historyList">
         <li class="history-empty">Brak historii</li>
