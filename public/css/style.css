@@ -223,6 +223,12 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--primary);
 }
 
+/* WCAG 2.4.7 — explicit focus ring for keyboard users */
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 0;
+}
+
 textarea { resize: vertical; min-height: 72px; }
 
 .input-password { position: relative; }
@@ -305,7 +311,7 @@ input[type="range"] {
   object-fit: contain;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: var(--surface2);  /* was hardcoded #fff — invisible in dark mode */
   padding: 2px;
 }
 
@@ -404,8 +410,8 @@ input[type="range"] {
 
 /* ── Toast ──────────────────────────────────────────────────────────────── */
 .toast {
-  position: absolute;
-  bottom: 1rem;
+  position: fixed;          /* was absolute — prevented overflow on mobile */
+  bottom: 1.5rem;
   left: 50%;
   transform: translateX(-50%);
   background: var(--text);
@@ -417,8 +423,10 @@ input[type="range"] {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.25s;
-  white-space: nowrap;
-  z-index: 10;
+  white-space: normal;      /* was nowrap — long messages were clipped on mobile */
+  max-width: min(calc(100vw - 2rem), 360px);
+  text-align: center;
+  z-index: 1000;
 }
 /* U5: allow click-to-dismiss when visible */
 .toast.show { opacity: 1; pointer-events: auto; cursor: pointer; }
@@ -431,6 +439,8 @@ input[type="range"] {
   margin-top: 0.25rem;
   padding: 0 0.1rem;
 }
+/* WCAG AA contrast fix: #dc2626 on --surface (#1e293b) is ~3.7:1 — below 4.5:1 threshold */
+[data-theme="dark"] .form-hint { color: #fca5a5; }
 
 /* ── Char counter ────────────────────────────────────────────────────────── */
 /* UX-06: character counter shown below textareas with maxlength */
@@ -487,9 +497,44 @@ input[type="range"] {
   height: 40px;
   border-radius: 4px;
   object-fit: contain;
-  background: #fff;
+  background: var(--surface2); /* was hardcoded #fff */
   flex-shrink: 0;
 }
+
+/* Placeholder for history items without a stored thumbnail (sensitive/SVG types) */
+.history-thumb-placeholder {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface2);
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+/* Per-item delete button — revealed on hover/focus */
+.history-item-delete {
+  position: static;
+  transform: none;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.75rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity var(--transition), color var(--transition);
+  font-family: inherit;
+}
+.history-item:hover .history-item-delete,
+.history-item:focus-within .history-item-delete { opacity: 1; }
+.history-item-delete:hover { color: #ef4444; }
 
 .history-meta { flex: 1; min-width: 0; }
 .history-meta strong {

@@ -13,24 +13,37 @@ const ASSETS = [
 
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(cache => cache.addAll(ASSETS))
+    caches.open(CACHE)
+      .then(cache => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting())  // inside waitUntil — correct lifecycle order
+      .catch(err => console.warn('[SW] Install failed:', err))
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-    )
+    Promise.all([
+      // Remove old caches
+      caches.keys().then(keys =>
+        Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+      ),
+      // Claim clients inside waitUntil — after old caches are cleared
+      self.clients.claim(),
+    ])
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', e => {
-  // Only handle GET requests for same-origin assets
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).catch(() => {
+        // Offline fallback: return the cached app shell for navigation requests
+        if (e.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+      });
+    })
   );
 });

@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light dark" />
   <title>Generator QR</title>
   <meta name="theme-color" content="#5b6ee1" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; worker-src 'self';" />
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -52,47 +53,47 @@
 
     <!-- Type selector -->
     <div class="type-grid" role="group" aria-label="Typ kodu QR">
-      <button class="type-btn active" data-type="wifi">
+      <button class="type-btn active" data-type="wifi" aria-pressed="true">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M5 12.55a11 11 0 0 1 14.08 0"/>
           <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
         </svg>
         WiFi
       </button>
-      <button class="type-btn" data-type="url">
+      <button class="type-btn" data-type="url" aria-pressed="false">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
         </svg>
         URL
       </button>
-      <button class="type-btn" data-type="text">
+      <button class="type-btn" data-type="text" aria-pressed="false">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/>
           <line x1="12" y1="4" x2="12" y2="20"/>
         </svg>
         Tekst
       </button>
-      <button class="type-btn" data-type="email">
+      <button class="type-btn" data-type="email" aria-pressed="false">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
           <polyline points="22,6 12,13 2,6"/>
         </svg>
         Email
       </button>
-      <button class="type-btn" data-type="phone">
+      <button class="type-btn" data-type="phone" aria-pressed="false">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.44 2 2 0 0 1 3.58 1.25h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.8a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
         </svg>
         Telefon
       </button>
-      <button class="type-btn" data-type="sms">
+      <button class="type-btn" data-type="sms" aria-pressed="false">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
         SMS
       </button>
-      <button class="type-btn" data-type="vcard">
+      <button class="type-btn" data-type="vcard" aria-pressed="false">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="2" y="5" width="20" height="14" rx="2"/><path d="M16 10a4 4 0 0 1-8 0"/>
         </svg>
@@ -107,7 +108,7 @@
       <div class="form-fields" id="form-wifi">
         <div class="field-group">
           <label for="wifi-ssid">Nazwa sieci (SSID)</label>
-          <input type="text" id="wifi-ssid" name="ssid" placeholder="MojaSiec" autocomplete="off" />
+          <input type="text" id="wifi-ssid" name="ssid" placeholder="MojaSiec" />
         </div>
         <div class="field-group">
           <label for="wifi-password">Hasło</label>
@@ -146,7 +147,7 @@
       <div class="form-fields hidden" id="form-url">
         <div class="field-group">
           <label for="url-link">Adres URL</label>
-          <input type="url" id="url-link" name="url" placeholder="https://example.com" autocomplete="off" />
+          <input type="url" id="url-link" name="url" placeholder="https://example.com" autocomplete="url" />
         </div>
       </div>
 
@@ -163,11 +164,11 @@
       <div class="form-fields hidden" id="form-email">
         <div class="field-group">
           <label for="email-to">Do (adres email)</label>
-          <input type="email" id="email-to" name="to" placeholder="odbiorca@example.com" autocomplete="off" />
+          <input type="email" id="email-to" name="to" placeholder="odbiorca@example.com" autocomplete="email" />
         </div>
         <div class="field-group">
           <label for="email-subject">Temat</label>
-          <input type="text" id="email-subject" name="subject" placeholder="Temat wiadomości" autocomplete="off" />
+          <input type="text" id="email-subject" name="subject" placeholder="Temat wiadomości" />
         </div>
         <div class="field-group">
           <label for="email-body">Treść</label>
@@ -180,7 +181,7 @@
       <div class="form-fields hidden" id="form-phone">
         <div class="field-group">
           <label for="phone-number">Numer telefonu</label>
-          <input type="tel" id="phone-number" name="phone" placeholder="+48123456789" autocomplete="off" />
+          <input type="tel" id="phone-number" name="phone" placeholder="+48123456789" autocomplete="tel" />
         </div>
       </div>
 
@@ -188,7 +189,7 @@
       <div class="form-fields hidden" id="form-sms">
         <div class="field-group">
           <label for="sms-phone">Numer telefonu</label>
-          <input type="tel" id="sms-phone" name="phone" placeholder="+48123456789" autocomplete="off" />
+          <input type="tel" id="sms-phone" name="phone" placeholder="+48123456789" autocomplete="tel" />
         </div>
         <div class="field-group">
           <label for="sms-message">Wiadomość</label>
@@ -202,28 +203,28 @@
         <div class="field-row">
           <div class="field-group">
             <label for="vcard-first">Imię</label>
-            <input type="text" id="vcard-first" name="firstName" placeholder="Jan" autocomplete="off" />
+            <input type="text" id="vcard-first" name="firstName" placeholder="Jan" autocomplete="given-name" />
           </div>
           <div class="field-group">
             <label for="vcard-last">Nazwisko</label>
-            <input type="text" id="vcard-last" name="lastName" placeholder="Kowalski" autocomplete="off" />
+            <input type="text" id="vcard-last" name="lastName" placeholder="Kowalski" autocomplete="family-name" />
           </div>
         </div>
         <div class="field-group">
           <label for="vcard-phone">Telefon</label>
-          <input type="tel" id="vcard-phone" name="phone" placeholder="+48123456789" autocomplete="off" />
+          <input type="tel" id="vcard-phone" name="phone" placeholder="+48123456789" autocomplete="tel" />
         </div>
         <div class="field-group">
           <label for="vcard-email">Email</label>
-          <input type="email" id="vcard-email" name="email" placeholder="jan@example.com" autocomplete="off" />
+          <input type="email" id="vcard-email" name="email" placeholder="jan@example.com" autocomplete="email" />
         </div>
         <div class="field-group">
           <label for="vcard-org">Organizacja</label>
-          <input type="text" id="vcard-org" name="org" placeholder="Firma Sp. z o.o." autocomplete="off" />
+          <input type="text" id="vcard-org" name="org" placeholder="Firma Sp. z o.o." autocomplete="organization" />
         </div>
         <div class="field-group">
           <label for="vcard-url">Strona www</label>
-          <input type="url" id="vcard-url" name="url" placeholder="https://example.com" autocomplete="off" />
+          <input type="url" id="vcard-url" name="url" placeholder="https://example.com" autocomplete="url" />
         </div>
       </div>
 
@@ -273,7 +274,7 @@
       <div class="field-group">
         <label>Kształt modułów</label>
         <div class="dot-style-group" role="group" aria-label="Kształt modułów">
-          <button type="button" class="dot-btn active" data-dot="square" title="Kwadrat">
+          <button type="button" class="dot-btn active" data-dot="square" title="Kwadrat" aria-pressed="true">
             <svg width="32" height="32" viewBox="0 0 32 32">
               <rect x="2"  y="2"  width="10" height="10" rx="0" fill="currentColor"/>
               <rect x="14" y="2"  width="4"  height="4"  fill="currentColor"/>
@@ -287,7 +288,7 @@
             </svg>
             Kwadrat
           </button>
-          <button type="button" class="dot-btn" data-dot="rounded" title="Zaokrąglony">
+          <button type="button" class="dot-btn" data-dot="rounded" title="Zaokrąglony" aria-pressed="false">
             <svg width="32" height="32" viewBox="0 0 32 32">
               <rect x="2"  y="2"  width="10" height="10" rx="3.5" fill="currentColor"/>
               <rect x="14" y="2"  width="4"  height="4"  rx="1.5" fill="currentColor"/>
@@ -301,7 +302,7 @@
             </svg>
             Zaokrąglony
           </button>
-          <button type="button" class="dot-btn" data-dot="circle" title="Kółko">
+          <button type="button" class="dot-btn" data-dot="circle" title="Kółko" aria-pressed="false">
             <svg width="32" height="32" viewBox="0 0 32 32">
               <circle cx="7"  cy="7"  r="5"   fill="currentColor"/>
               <circle cx="16" cy="4"  r="2"   fill="currentColor"/>
@@ -361,7 +362,7 @@
         </div>
         <img id="qrImage" class="qr-image hidden" alt="Wygenerowany kod QR" />
         <div id="qrSvgWrap" class="qr-svg-wrap hidden"></div>
-        <div class="qr-spinner hidden" id="qrSpinner">
+        <div class="qr-spinner hidden" id="qrSpinner" role="status" aria-label="Generowanie kodu QR…">
           <div class="spinner"></div>
         </div>
       </div>

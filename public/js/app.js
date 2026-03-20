@@ -40,7 +40,9 @@ const formHint      = document.getElementById('formHint');
 
 // ── Service Worker ────────────────────────────────────────────────────────────
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {/* non-critical */});
+  navigator.serviceWorker.register('sw.js').catch(err =>
+    console.warn('[SW] Rejestracja nie powiodła się:', err)
+  );
 }
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -62,17 +64,23 @@ document.getElementById('themeToggle').addEventListener('click', () => {
 // ── Type buttons ──────────────────────────────────────────────────────────────
 document.querySelectorAll('.type-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.type-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.type-btn').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
     btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
     currentType = btn.dataset.type;
     document.querySelectorAll('.form-fields').forEach(f => f.classList.add('hidden'));
     document.getElementById(`form-${currentType}`).classList.remove('hidden');
+    const firstField = document.querySelector(`#form-${currentType} input, #form-${currentType} textarea, #form-${currentType} select`);
+    if (firstField) firstField.focus();
     scheduleGenerate();
   });
 });
 
-// ── Form input listeners (real-time) ─────────────────────────────────────────
-document.querySelectorAll('input, select, textarea').forEach(el => {
+// ── Form input listeners (real-time) — only form fields, not style controls ───
+document.querySelectorAll('#formCard input, #formCard select, #formCard textarea').forEach(el => {
   el.addEventListener('input', scheduleGenerate);
   el.addEventListener('change', scheduleGenerate);
 });
@@ -107,8 +115,12 @@ document.querySelectorAll('input[name="format"]').forEach(r =>
 // ── Dot style buttons ─────────────────────────────────────────────────────────
 document.querySelectorAll('.dot-btn').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.dot-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.dot-btn').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
     btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
     currentDotStyle = btn.dataset.dot;
     scheduleGenerate();
   });
@@ -142,14 +154,48 @@ togglePwdBtn.addEventListener('click', () => {
   document.querySelector('.eye-closed').style.display = isHidden ? '' : 'none';
 });
 
+// ── Disable WiFi password field when security = nopass ────────────────────────
+document.getElementById('wifi-security').addEventListener('change', e => {
+  const pwdInput = document.getElementById('wifi-password');
+  const isOpen   = e.target.value === 'nopass';
+  pwdInput.disabled = isOpen;
+  if (isOpen) pwdInput.value = '';
+});
+
 // ── Logo upload ───────────────────────────────────────────────────────────────
 document.getElementById('logoPickBtn').addEventListener('click', () =>
   document.getElementById('logoFile').click()
 );
 
-document.getElementById('logoFile').addEventListener('change', e => {
+async function validateMagicBytes(file) {
+  if (file.type === 'image/svg+xml') return true; // SVG is text — skip binary check
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const buf = new Uint8Array(e.target.result);
+      if (file.type === 'image/png')
+        resolve(buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47);
+      else if (file.type === 'image/jpeg')
+        resolve(buf[0] === 0xFF && buf[1] === 0xD8);
+      else if (file.type === 'image/webp')
+        resolve(String.fromCharCode(...buf.slice(0,4)) === 'RIFF' &&
+                String.fromCharCode(...buf.slice(8,12)) === 'WEBP');
+      else
+        resolve(false);
+    };
+    reader.onerror = () => resolve(false);
+    reader.readAsArrayBuffer(file.slice(0, 12));
+  });
+}
+
+document.getElementById('logoFile').addEventListener('change', async e => {
   const file = e.target.files[0];
   if (!file) return;
+  if (!await validateMagicBytes(file)) {
+    showToast('Nieprawidłowy format pliku — użyj PNG, JPG, WebP lub SVG.');
+    e.target.value = '';
+    return;
+  }
   logoFile = file;
   document.getElementById('logoName').textContent = file.name;
   document.getElementById('logoRemove').classList.remove('hidden');
@@ -171,7 +217,7 @@ document.getElementById('logoRemove').addEventListener('click', () => {
   document.getElementById('logoName').textContent = 'brak';
   document.getElementById('logoRemove').classList.add('hidden');
   const preview = document.getElementById('logoPreview');
-  preview.src = '';
+  preview.removeAttribute('src');  // avoid empty-src network request
   preview.classList.add('hidden');
   scheduleGenerate();
 });
@@ -187,6 +233,7 @@ document.getElementById('copyBtn').addEventListener('click', () => {
 
 // ── History ───────────────────────────────────────────────────────────────────
 document.getElementById('clearHistory').addEventListener('click', () => {
+  if (!confirm('Wyczyścić całą historię?')) return;
   localStorage.removeItem(HISTORY_KEY);
   renderHistory();
 });
@@ -195,7 +242,8 @@ renderHistory();
 
 // ── QR data formatters (mirrors server-side logic) ────────────────────────────
 function escapeWifi(s) {
-  return String(s).replace(/[\\;,"]/g, c => '\\' + c);
+  // Per zxing WiFi QR spec: escape \  ;  ,  "  :
+  return String(s).replace(/[\\;,":]/g, c => '\\' + c);
 }
 function escapeVCard(s) {
   return String(s).replace(/[\\;,]/g, c => '\\' + c).replace(/\n/g, '\\n');
@@ -247,7 +295,7 @@ function buildQRData(type, data) {
         org   ? `ORG:${escapeVCard(org)}`     : null,
         url   ? `URL:${escapeVCard(url)}`     : null,
         'END:VCARD',
-      ].filter(Boolean).join('\n');
+      ].filter(Boolean).join('\r\n');  // RFC 2426: CRLF line endings
     }
 
     default:
@@ -404,8 +452,10 @@ function compositeLogoOnQR(qrDataUrl, file, qrWidth) {
 
 // ── Local QR generation (no server required) ──────────────────────────────────
 async function generateQRLocally(type, data, options) {
-  const qrData  = buildQRData(type, data);
-  const qrOpts  = normaliseOptions(options, logoFile ? 'H' : 'M');
+  const qrData = buildQRData(type, data);
+  // Force ECL=H when logo is overlaid — mandatory for reliable scanning
+  const effectiveOpts = logoFile ? { ...options, errorCorrectionLevel: 'H' } : options;
+  const qrOpts  = normaliseOptions(effectiveOpts);
   const format  = options.format === 'svg' ? 'svg' : 'png';
   const useCustom = qrOpts.dotStyle !== 'square';
 
@@ -526,6 +576,21 @@ function hasEnoughData(data) {
   return getValidationError(data) === null;
 }
 
+// ── Collect current UI options ────────────────────────────────────────────────
+function collectOptions(formatOverride) {
+  return {
+    format:               formatOverride ?? (document.querySelector('input[name="format"]:checked')?.value ?? 'png'),
+    width:                parseInt(document.getElementById('opt-size').value),
+    margin:               parseInt(document.getElementById('opt-margin').value),
+    errorCorrectionLevel: document.getElementById('opt-ecl').value,
+    dotStyle:             currentDotStyle,
+    color: {
+      dark:  document.getElementById('opt-dark').value,
+      light: document.getElementById('opt-light').value,
+    },
+  };
+}
+
 // ── Debounced generation trigger ──────────────────────────────────────────────
 function scheduleGenerate() {
   clearTimeout(generateTimer);
@@ -552,17 +617,7 @@ async function generateQR() {
     return;
   }
 
-  const options = {
-    format:               document.querySelector('input[name="format"]:checked').value,
-    width:                parseInt(document.getElementById('opt-size').value),
-    margin:               parseInt(document.getElementById('opt-margin').value),
-    errorCorrectionLevel: document.getElementById('opt-ecl').value,
-    dotStyle:             currentDotStyle,
-    color: {
-      dark:  document.getElementById('opt-dark').value,
-      light: document.getElementById('opt-light').value,
-    },
-  };
+  const options = collectOptions();
 
   const seq = ++genSeq;
   showSpinner();
@@ -573,7 +628,7 @@ async function generateQR() {
 
     if (logoFile && result.format === 'png') {
       const composited = await compositeLogoOnQR(result.qr, logoFile, options.width || 300);
-      if (seq !== genSeq) return;
+      if (seq !== genSeq) return; // check AFTER async compositing too
       const final = { ...result, qr: composited };
       displayQR(final, data);
       saveToHistory(final, data);
@@ -607,6 +662,7 @@ function displayQR(result, data) {
     const svgEl  = doc.documentElement;
     if (svgEl.nodeName === 'parsererror' || svgEl.querySelector('parsererror')) {
       showPlaceholder();
+      showToast('Błąd renderowania SVG');
       return;
     }
     qrSvgWrap.innerHTML = '';
@@ -651,37 +707,32 @@ async function downloadQR(requestedFormat) {
 
   if (requestedFormat === 'svg' && currentQR.format === 'svg') {
     downloadBlob(new Blob([currentQR.qr], { type: 'image/svg+xml' }), `${label}.svg`);
+    showToast('Pobrano plik SVG');
     return;
   }
   if (requestedFormat === 'png' && currentQR.format === 'png') {
     downloadDataUrl(currentQR.qr, `${label}.png`);
+    showToast('Pobrano plik PNG');
     return;
   }
 
-  // Re-generate in the required format
+  // Re-generate in the requested format (don't overwrite currentQR.format)
   const data    = collectData();
-  const options = {
-    format:               requestedFormat,
-    width:                parseInt(document.getElementById('opt-size').value),
-    margin:               parseInt(document.getElementById('opt-margin').value),
-    errorCorrectionLevel: document.getElementById('opt-ecl').value,
-    dotStyle:             currentDotStyle,
-    color: {
-      dark:  document.getElementById('opt-dark').value,
-      light: document.getElementById('opt-light').value,
-    },
-  };
+  const options = collectOptions(requestedFormat);
 
   try {
     const result = await generateQRLocally(currentType, data, options);
-    currentQR = { ...currentQR, ...result };
+    // Only update currentQR if the requested format matches what's displayed
+    if (requestedFormat === currentQR.format) currentQR = { ...currentQR, ...result };
 
     if (requestedFormat === 'svg') {
       downloadBlob(new Blob([result.qr], { type: 'image/svg+xml' }), `${label}.svg`);
     } else {
       downloadDataUrl(result.qr, `${label}.png`);
     }
-  } catch {
+    showToast(`Pobrano plik ${requestedFormat.toUpperCase()}`);
+  } catch (err) {
+    console.error('Błąd pobierania:', err);
     showToast('Błąd pobierania');
   }
 }
@@ -699,9 +750,10 @@ function downloadBlob(blob, filename) {
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
-function saveToHistory(result, data) {
-  if (result.format !== 'png') return;
+// Types whose QR payload contains sensitive data — thumbnails not stored
+const SENSITIVE_TYPES = new Set(['wifi']);
 
+function saveToHistory(result, data) {
   const history = loadHistory();
   let preview = '';
   switch (currentType) {
@@ -714,9 +766,20 @@ function saveToHistory(result, data) {
     case 'vcard':  preview = `${data.firstName || ''} ${data.lastName || ''}`.trim() || '–'; break;
   }
 
+  // Don't store thumbnail for sensitive types (WiFi QR encodes the password)
+  // Also skip for SVG format (not a PNG data URL)
+  const thumb = (!SENSITIVE_TYPES.has(currentType) && result.format === 'png')
+    ? result.qr : null;
+
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  history.unshift({ id, type: currentType, label: TYPE_LABELS[currentType], preview, thumb: result.qr, ts: Date.now() });
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+  history.unshift({ id, type: currentType, label: TYPE_LABELS[currentType], preview, thumb, ts: Date.now() });
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+  } catch (e) {
+    if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+      showToast('Brak miejsca w historii – wyczyść ją, aby zwolnić pamięć.');
+    }
+  }
   renderHistory();
 }
 
@@ -745,30 +808,47 @@ function renderHistory() {
     li.setAttribute('tabindex', '0');
     li.title = 'Kliknij, aby zobaczyć ponownie';
 
-    const img  = document.createElement('img');
-    img.src    = item.thumb;
-    img.alt    = `QR ${item.label}`;
-    img.loading = 'lazy';
-    img.width  = 40;
-    img.height = 40;
+    if (item.thumb) {
+      const img  = document.createElement('img');
+      img.src    = item.thumb;
+      img.alt    = `QR ${item.label}`;
+      img.loading = 'lazy';
+      img.width  = 40;
+      img.height = 40;
+      li.append(img);
+    } else {
+      const ph = document.createElement('div');
+      ph.className = 'history-thumb-placeholder';
+      ph.setAttribute('aria-hidden', 'true');
+      ph.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="5" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="16" y="5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="5" y="16" width="3" height="3" fill="currentColor" stroke="none"/><rect x="14" y="14" width="2" height="2" fill="currentColor" stroke="none"/><rect x="18" y="14" width="2" height="2" fill="currentColor" stroke="none"/><rect x="14" y="18" width="2" height="2" fill="currentColor" stroke="none"/><rect x="18" y="18" width="2" height="2" fill="currentColor" stroke="none"/></svg>';
+      li.append(ph);
+    }
 
     const meta   = document.createElement('div');
     meta.className = 'history-meta';
-
     const strong = document.createElement('strong');
     strong.textContent = item.label;
-
     const span = document.createElement('span');
     span.textContent = item.preview;
-
     meta.append(strong, span);
-    li.append(img, meta);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'history-item-delete';
+    delBtn.setAttribute('aria-label', `Usuń ${item.label}`);
+    delBtn.textContent = '✕';
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const updated = loadHistory().filter(h => (h.id || String(h.ts)) !== li.dataset.historyId);
+      try { localStorage.setItem(HISTORY_KEY, JSON.stringify(updated)); } catch { /* ok */ }
+      renderHistory();
+    });
+
+    li.append(meta, delBtn);
     historyList.append(li);
 
     li.addEventListener('click', () => {
-      const current = loadHistory();
-      const entry   = current.find(e => (e.id || String(e.ts)) === li.dataset.historyId);
-      if (!entry) return;
+      const entry = loadHistory().find(e => (e.id || String(e.ts)) === li.dataset.historyId);
+      if (!entry?.thumb) return;
       displayQR({ qr: entry.thumb, format: 'png' }, {});
     });
     li.addEventListener('keydown', e => { if (e.key === 'Enter') li.click(); });
@@ -787,4 +867,11 @@ function showToast(msg) {
 toast.addEventListener('click', () => {
   clearTimeout(toastTimer);
   toast.classList.remove('show');
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && toast.classList.contains('show')) {
+    clearTimeout(toastTimer);
+    toast.classList.remove('show');
+  }
 });
